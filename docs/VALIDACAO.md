@@ -16,7 +16,7 @@ O checklist específico de três telas, perfis 480p/720p e prévias está em [MU
 
 1. No PC A, entre no site, escolha um apelido e crie uma sala.
 2. Copie o convite e abra-o no PC B. Escolha outro apelido e entre. Verifique ambos na lista.
-3. No PC A, clique em **Compartilhar jogo**. Escolha resolução e FPS, clique em Escolher janela e compartilhar e escolha uma janela real de jogo no seletor do navegador. Janelas devem transmitir sem áudio; para testar áudio, use uma aba do navegador.
+3. No PC A, clique em **Compartilhar jogo**. Escolha resolução e FPS, clique em Escolher janela e compartilhar e escolha uma janela real de jogo no seletor do navegador. Com áudio do sistema desmarcado, janelas devem transmitir sem áudio. Para testar o som do PC, marque Compartilhar áudio do sistema e habilite o áudio no seletor do navegador.
 4. No PC B, confirme que a imagem corresponde ao jogo e se move em tempo real. Se houver botão de reprodução, clique nele.
 5. Reproduza um som identificável no jogo. Confirme audibilidade no PC B e compare com a indicação de trilha capturada. A presença de uma trilha sozinha não conta como teste de som.
 6. Abra Configurações → Diagnóstico. Registre resolução, FPS, bitrate, codec, RTT, perdas, ICE e rota reais quando disponíveis. Verifique o alvo 720p30 onde suportado; não reprove negociação válida apenas por usar um fallback de codec.
@@ -33,10 +33,13 @@ O checklist específico de três telas, perfis 480p/720p e prévias está em [MU
 
 ## Isolamento do áudio
 
-- [ ] Compartilhe a janela do jogo com YouTube ao fundo. Confirme vídeo e ausência de áudio de ambos: o som de janelas está bloqueado. Consulte [AUDIO.md](AUDIO.md).
+- [ ] Marque Compartilhar áudio do sistema, escolha tela inteira e habilite áudio no seletor do navegador. Confirme o som do jogo e do YouTube juntos, com o aviso correto. Se não houver trilha, o aviso deve explicar isso e preservar o vídeo.
+- [ ] Desmarque a opção e recompartilhe: áudio global deve ser removido. Não há solicitação de microfone.
+
+- [ ] Compartilhe a janela do jogo com YouTube ao fundo. Confirme vídeo e ausência de áudio de ambos: o som de janelas está bloqueado quando Compartilhar áudio do sistema está desmarcado. Consulte [AUDIO.md](AUDIO.md).
 - [ ] Compartilhe uma aba com áudio: o som de outra aba/aplicativo deve ficar de fora.
 - [ ] Compartilhe uma tela inteira: a aplicação deve manter vídeo e remover qualquer trilha de áudio global, com aviso.
-- [ ] Mesmo se o navegador oferecer/devolver áudio do sistema para a janela, confirme que o app remove a trilha e mantém o vídeo. Registre a versão e o sistema operacional.
+- [ ] Com Compartilhar áudio do sistema desmarcado, mesmo se o navegador devolver áudio global para a janela, confirme que o app remove a trilha e mantém o vídeo. Registre a versão e o sistema operacional.
 
 ## Grupo e concorrência
 

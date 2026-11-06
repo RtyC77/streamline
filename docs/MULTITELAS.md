@@ -31,7 +31,7 @@ Se o navegador não entregar um quadro dentro de três segundos, se a imagem exc
 
 Resolução, FPS e bitrate são preferências/limites pedidos pela captura e pelo RTCRtpSender. O navegador preserva proporção, negocia codecs e pode entregar valores diferentes; a adaptação nativa pode usar bitrate ainda menor. O controle adicional reduz o teto em congestionamento e o recupera gradualmente. Não há ampliação de uma captura menor.
 
-H.264 e Opus continuam preferidos, sem prometer aceleração de hardware. Áudio é permitido somente para uma aba do navegador quando disponibilizado. Áudio de janelas (inclusive jogos), monitor ou fonte não identificada é encerrado e removido antes da transmissão para bloquear misturas do PC. Microfone nunca é solicitado automaticamente. Consulte [AUDIO.md](AUDIO.md).
+H.264 e Opus continuam preferidos, sem prometer aceleração de hardware. Por padrão, áudio é permitido somente para uma aba do navegador. Ao marcar **Compartilhar áudio do sistema**, janelas e tela inteira também podem transmitir o áudio fornecido pelo navegador, incluindo outros aplicativos. Sem essa opção, essas trilhas são removidas. Microfone nunca é solicitado automaticamente. Consulte [AUDIO.md](AUDIO.md).
 
 ## Uso do Supabase
 

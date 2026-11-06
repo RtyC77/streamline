@@ -57,7 +57,7 @@ export function Settings({
         </div>
         <div>
           <dt>Fonte de áudio permitida</dt>
-          <dd>Apenas a aba selecionada. Janelas e tela inteira ficam sem áudio.</dd>
+          <dd>{profile.systemAudio?'Áudio do sistema permitido: pode incluir outros aplicativos.':'Apenas a aba selecionada. Áudio do sistema desativado.'}</dd>
         </div>
         <div>
           <dt>Sinalização</dt>

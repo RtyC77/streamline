@@ -47,6 +47,18 @@ function prepare(
 }
 afterEach(() => vi.unstubAllGlobals());
 describe("Captura respeita o navegador", () => {
+  it.each(['window','monitor',null] as const)('mantém áudio de %s quando o usuário autoriza som do sistema',async surface=>{
+    const p=prepare(true,true,surface);const result=await captureGame({resolution:480,fps:24,systemAudio:true});
+    expect(p.display).toHaveBeenCalledWith(expect.objectContaining({systemAudio:'include',windowAudio:'system'}));
+    expect(result.stream.getAudioTracks()).toHaveLength(1);expect(p.sound.stop).not.toHaveBeenCalled();expect(result.audio).toContain('pode incluir');expect(p.mic).not.toHaveBeenCalled();
+  });
+  it('continua com vídeo se o usuário autorizar áudio e o navegador não o retornar',async()=>{
+    const p=prepare();const result=await captureGame({resolution:720,fps:30,systemAudio:true});
+    expect(result.stream.getVideoTracks()).toHaveLength(1);expect(result.stream.getAudioTracks()).toHaveLength(0);expect(result.audio).toContain('não disponibilizou');expect(p.mic).not.toHaveBeenCalled();
+  });
+  it('rejeita uma opção não booleana antes de pedir captura',async()=>{
+    const p=prepare(true);await expect(captureGame({resolution:720,fps:30,systemAudio:'true'} as unknown as Parameters<typeof captureGame>[0])).rejects.toThrow('Opção de áudio inválida');expect(p.display).not.toHaveBeenCalled();
+  });
   it.each([{resolution:480 as const,fps:24 as const},{resolution:480 as const,fps:30 as const},{resolution:720 as const,fps:24 as const}])('aplica perfil %o na captura',async profile=>{
     const p=prepare();const result=await captureGame(profile);expect(result.profile).toEqual(profile);
     expect(p.track.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({height:{ideal:profile.resolution,max:profile.resolution},frameRate:{ideal:profile.fps,max:profile.fps}}));

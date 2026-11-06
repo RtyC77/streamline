@@ -15,12 +15,13 @@ export function captureSupported() {
 }
 export async function captureGame(profile:CaptureProfile=defaultProfile): Promise<CaptureInfo> {
   const target=videoProfile(profile);
+  const allowSystemAudio=profile.systemAudio===true;
   if (!captureSupported())
     throw new Error(
       "Use Chrome ou Edge atualizado em HTTPS (ou localhost) para compartilhar.",
     );
   // windowAudio is only a picker hint; it cannot prove per-application isolation.
-  // Request tab audio only, then reject any audio accompanying another surface.
+  // System audio requires the explicit UI option; tab audio remains the default.
   const options: DisplayMediaStreamOptions & {
     windowAudio: string;
     systemAudio: string;
@@ -37,8 +38,8 @@ export async function captureGame(profile:CaptureProfile=defaultProfile): Promis
       noiseSuppression: false,
       autoGainControl: false,
     },
-    windowAudio: "exclude",
-    systemAudio: "exclude",
+    windowAudio: allowSystemAudio ? "system" : "exclude",
+    systemAudio: allowSystemAudio ? "include" : "exclude",
     selfBrowserSurface: "exclude",
     surfaceSwitching: "exclude",
   };
@@ -50,10 +51,10 @@ export async function captureGame(profile:CaptureProfile=defaultProfile): Promis
   }
   // A window video track can accompany system-wide audio. Neither its surface,
   // track label, browser version nor restrictOwnAudio proves isolation of a game.
-  // Fail closed even when a browser ignores the exclusion hints.
+  // Fail closed unless the user explicitly opted into system-wide audio.
   const surface = video.getSettings().displaySurface;
   const scopedSurface = surface === "browser";
-  if (!scopedSurface)
+  if (!scopedSurface && !allowSystemAudio)
     for (const audio of stream.getAudioTracks()) {
       audio.stop();
       stream.removeTrack(audio);
@@ -83,10 +84,12 @@ export async function captureGame(profile:CaptureProfile=defaultProfile): Promis
     settings: video.getSettings(),
     tuning,
     audio: stream.getAudioTracks().length
-      ? "Trilha de áudio da aba capturada"
-      : !scopedSurface
-        ? "Sem áudio: o áudio de janelas e telas inteiras foi desativado para impedir o som de outros aplicativos. O vídeo continua. Áudio restrito está disponível ao compartilhar uma aba do navegador."
-        : "Sem áudio: o navegador não disponibilizou áudio da aba selecionada. O vídeo continua normalmente.",
+      ? scopedSurface
+        ? "Trilha de áudio da aba capturada"
+        : "Áudio do sistema capturado: pode incluir jogo, YouTube e outros aplicativos."
+      : !scopedSurface && !allowSystemAudio
+        ? "Sem áudio: áudio do sistema desativado. Para incluir o som do PC, ative Compartilhar áudio do sistema antes de escolher a fonte."
+        : "Sem áudio: o navegador não disponibilizou uma trilha. Habilite também a opção de áudio no seletor do navegador, quando oferecida. O vídeo continua normalmente.",
   };
 }
 export function preferCodecs(pc: RTCPeerConnection) {

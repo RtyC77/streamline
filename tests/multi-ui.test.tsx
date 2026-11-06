@@ -5,6 +5,11 @@ import {RoomPage} from '../src/pages/RoomPage';
 import {validStill} from '../src/media/still';
 afterEach(()=>vi.unstubAllGlobals());
 describe('Compartilhamento e seleção',()=>{
+ it('oferece áudio do sistema desmarcado e avisa sobre outros aplicativos',()=>{
+  const html=renderToStaticMarkup(<ShareOptions onClose={()=>{}} onShare={()=>{}}/>);
+  expect(html).toContain('Compartilhar áudio do sistema');expect(html).toContain('YouTube');expect(html).not.toContain('checked=""');
+  const opted=renderToStaticMarkup(<ShareOptions initial={{resolution:480,fps:24,systemAudio:true}} onClose={()=>{}} onShare={()=>{}}/>);expect(opted).toContain('checked=""');
+ });
  it('oferece somente 480p/720p e 24/30 FPS',()=>{
   const html=renderToStaticMarkup(<ShareOptions onClose={()=>{}} onShare={()=>{}}/>);
   for(const value of [480,720,24,30])expect(html).toContain(`value="${value}"`);
