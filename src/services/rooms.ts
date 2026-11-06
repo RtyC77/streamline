@@ -54,6 +54,12 @@ export const leaveRoom = (room: string) =>
   rpc<null>("leave_room", { p_room: room, p_client: tabId() });
 export const claimStream = (room: string) =>
   rpc<string>("claim_stream", { p_room: room, p_client: tabId() });
+export const kickMember = (room: string, user: string) =>
+  rpc<Snapshot>("kick_member", {
+    p_room: room,
+    p_client: tabId(),
+    p_user: user,
+  });
 export const releaseStream = (room: string, session: string) =>
   rpc<null>("release_stream", {
     p_room: room,

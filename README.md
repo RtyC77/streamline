@@ -34,6 +34,7 @@ Abra o endereço informado pelo Vite (normalmente `http://127.0.0.1:5173`). Sem 
    - `supabase/migrations/202611050001_rooms.sql`
    - `supabase/migrations/202611050002_turn.sql`
    - `supabase/migrations/202611060003_reduce_room_churn.sql`
+   - `supabase/migrations/202611060004_host_kick.sql`
 5. Em **Realtime Settings**, **desative Allow public access**. Todos os canais da aplicação usam `private: true`. Não desative RLS. As migrations criam políticas em `realtime.messages`, onde o Supabase já mantém RLS habilitada.
 6. Em Auth, configure a Site URL de produção. Se usar CAPTCHA, habilite **Cloudflare Turnstile** na proteção contra abuso do Supabase, configure o segredo apenas no painel Auth, e a site key pública em `VITE_TURNSTILE_SITE_KEY`.
 7. No Turnstile, autorize o domínio de produção e o hostname local que você efetivamente usar. Não tente resolver desafios automaticamente.
@@ -182,7 +183,7 @@ Navegadores podem suspender timers em segundo plano. Por isso, o prazo também �
 
 ## 10. Limitações e próximas medições
 
-A sinalização é endereçada ao destinatário no protocolo, mas Broadcast distribui o evento aos membros autorizados inscritos no tópico do remetente. SDP e candidatos ICE podem revelar informações de conectividade aos participantes da mesma sala; o usuário sem associação não tem acesso. WebRTC criptografa a mídia em trânsito. Não há moderação/expulsão nem proteção contra um amigo autorizado que use um cliente modificado para perturbar a própria sala.
+A sinalização é endereçada ao destinatário no protocolo, mas Broadcast distribui o evento aos membros autorizados inscritos no tópico do remetente. SDP e candidatos ICE podem revelar informações de conectividade aos participantes da mesma sala; o usuário sem associação não tem acesso. WebRTC criptografa a mídia em trânsito. O criador pode expulsar participantes pelo ícone ao lado dos nomes; a permissão é validada no servidor. A expulsão não é banimento permanente: o convite válido permite reentrada. Consulte [docs/MODERACAO.md](docs/MODERACAO.md).
 
 A reconciliação de segurança usa heartbeat a cada 20 segundos no transmissor e 30 segundos nos espectadores, com avisos Realtime antecipando alterações. Presence antecipa saídas, e o banco define a autoridade. Canais mudam de geração quando a associação muda para não perpetuar autorizações Realtime em cache. Uma saída/revogação não é instantânea em todos os clientes: considere até o próximo heartbeat; perda abrupta de processo usa os prazos de 35 segundos (concessão de transmissão) e 60 segundos (associação). Abas suspensas pelo navegador podem perder suas concessões e precisar entrar novamente. Consulte [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
 

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   claim: vi.fn(),
   release: vi.fn(),
   leave: vi.fn(),
+  kick: vi.fn(),
   setLocal: vi.fn(),
   stopLocal: vi.fn(),
   disposed: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock("../src/services/rooms", () => ({
   claimStream: mocks.claim,
   releaseStream: mocks.release,
   leaveRoom: mocks.leave,
+  kickMember: mocks.kick,
   tabId: () => "tab",
 }));
 vi.mock("../src/services/signaling", () => ({
@@ -133,6 +135,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("Ciclo da sala e respostas concorrentes", () => {
+  it("encerra a sessão e volta à entrada quando o servidor remove a associação", async () => {
+    const { session, expired } = setup();
+    await session.start();
+    await flush();
+    mocks.pulse.mockRejectedValue({
+      message: "Sua participação expirou. Entre novamente pelo convite.",
+    });
+    await vi.advanceTimersByTimeAsync(30_000);
+    await flush();
+    expect(expired).toHaveBeenCalledOnce();
+    expect(mocks.disposed).toHaveBeenCalled();
+    expect(mocks.leave).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it("usa no máximo 121 pulses por hora em espera e não reenvia snapshots iguais ao React", async () => {
     const { session, snapshot } = setup();
     await session.start();

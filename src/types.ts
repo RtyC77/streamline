@@ -4,6 +4,7 @@ export interface Member {
   client_id: string;
 }
 export interface Room {
+  created_by?: string;
   channel_epoch: string;
   id: string;
   name: string;

@@ -9,6 +9,7 @@ export const cadence = {
 export function sameSnapshot(a: Snapshot, b: Snapshot) {
   return (
     a.room.id === b.room.id &&
+    a.room.created_by === b.room.created_by &&
     a.room.name === b.room.name &&
     a.room.expires_at === b.room.expires_at &&
     a.room.channel_epoch === b.room.channel_epoch &&

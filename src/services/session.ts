@@ -2,6 +2,7 @@ import type { CaptureInfo } from "../media/capture";
 import { Peers } from "../media/peers";
 import type { MediaState, PeerMetric, Snapshot } from "../types";
 import { claimStream, leaveRoom, pulse, releaseStream, tabId } from "./rooms";
+import { kickMember } from "./rooms";
 import { Signaling } from "./signaling";
 import { iceConfiguration } from "./supabase";
 import { cadence, sameSnapshot } from "./performance";
@@ -179,6 +180,18 @@ export class RoomSession {
       });
     } catch (e) {
       if (this.closed) return;
+      const message =
+        e && typeof e === "object" && "message" in e ? String(e.message) : "";
+      if (/Sua participação expirou|A sala expirou/.test(message)) {
+        void this.close()
+          .catch(() => undefined)
+          .finally(() =>
+            this.callbacks.expired?.(
+              "Sua participação foi encerrada pelo host ou expirou. Entre novamente pelo convite se desejar voltar.",
+            ),
+          );
+        return;
+      }
       this.callbacks.connection("Reconectando");
       this.callbacks.error(e);
       this.failures++;
@@ -260,6 +273,14 @@ export class RoomSession {
       await this.enqueue(() => releaseStream(this.state.room.id, session));
     void this.signaling?.notifyChange().catch(this.callbacks.error);
     if (!this.closed) await this.tick(true);
+  }
+  async kick(user: string) {
+    if (this.closed) return;
+    await this.enqueue(async () => {
+      if (this.closed) return;
+      const state = await kickMember(this.state.room.id, user);
+      await this.apply(state);
+    });
   }
   async close(voluntary = false) {
     this.closed = true;

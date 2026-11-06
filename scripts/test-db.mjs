@@ -40,6 +40,15 @@ await db.exec(
     "utf8",
   ),
 );
+await db.exec(
+  await readFile(
+    new URL(
+      "../supabase/migrations/202611060004_host_kick.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+);
 async function as(i) {
   await db.exec("reset role");
   await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
@@ -303,6 +312,55 @@ try {
   await denied(
     () => rpc("room_pulse", [room, tabs[2], null]),
     "participante removido precisa validar convite novamente",
+  );
+  await as(3);
+  const moderated = await rpc("create_room", ["Host", tabs[3]]);
+  const moderatedId = moderated.room.id;
+  ok(
+    moderated.room.created_by === ids[3],
+    "snapshot identifica o criador como host",
+  );
+  await as(4);
+  await rpc("join_room", [moderated.invite, "Visitante", tabs[4]]);
+  await denied(
+    () => rpc("kick_member", [moderatedId, tabs[4], ids[3]]),
+    "participante não expulsa o host",
+  );
+  await rpc("claim_stream", [moderatedId, tabs[4]]);
+  await as(5);
+  await denied(
+    () => rpc("kick_member", [moderatedId, tabs[5], ids[4]]),
+    "intruso não expulsa participantes",
+  );
+  await as(3);
+  await denied(
+    () => rpc("kick_member", [moderatedId, tabs[3], ids[3]]),
+    "host não se expulsa pelo controle de moderação",
+  );
+  const kicked = await rpc("kick_member", [moderatedId, tabs[3], ids[4]]);
+  ok(
+    kicked.members.length === 1 &&
+      !kicked.room.broadcaster_id &&
+      !kicked.room.stream_session,
+    "expulsão remove associação e encerra a transmissão do alvo",
+  );
+  ok(
+    kicked.room.channel_epoch !== moderated.room.channel_epoch,
+    "expulsão troca geração de autorização",
+  );
+  await as(4);
+  await denied(
+    () => rpc("room_pulse", [moderatedId, tabs[4], null]),
+    "expulso não consegue renovar participação",
+  );
+  ok(
+    (await db.query("select id from public.rooms where id=$1", [moderatedId]))
+      .rows.length === 0,
+    "RLS bloqueia leitura pelo expulso",
+  );
+  ok(
+    !(await rpc("join_room", [moderated.invite, "Visitante", tabs[4]])).error,
+    "expulsão permite reentrada mediante convite válido",
   );
   await as(7);
   let limited = false;

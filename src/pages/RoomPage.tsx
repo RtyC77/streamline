@@ -38,6 +38,18 @@ export function RoomPage({
   const [volume, setVolume] = useState(0.8);
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
+  const [kicking, setKicking] = useState<string | null>(null);
+  const kick = async (user: string) => {
+    if (kicking) return;
+    setKicking(user);
+    try {
+      await session.current?.kick(user);
+    } catch (e) {
+      report(e);
+    } finally {
+      setKicking(null);
+    }
+  };
   const session = useRef<RoomSession | null>(null);
   const stage = useRef<HTMLDivElement>(null);
   const report = useCallback((e: unknown) => setError(explain(e)), []);
@@ -170,6 +182,9 @@ export function RoomPage({
                   <strong>
                     {m.nickname}
                     {m.user_id === self && <small> você</small>}
+                    {m.user_id === snapshot.room.created_by && (
+                      <small> host</small>
+                    )}
                   </strong>
                   <span>
                     {m.user_id === snapshot.room.broadcaster_id
@@ -179,6 +194,17 @@ export function RoomPage({
                 </div>
                 {m.user_id === snapshot.room.broadcaster_id && (
                   <Icon name="screen" size={17} />
+                )}
+                {snapshot.room.created_by === self && m.user_id !== self && (
+                  <button
+                    className="icon-button"
+                    aria-label={`Expulsar ${m.nickname} da sala`}
+                    title={`Expulsar ${m.nickname}`}
+                    disabled={kicking !== null}
+                    onClick={() => void kick(m.user_id)}
+                  >
+                    <Icon name="removeUser" size={16} />
+                  </button>
                 )}
               </li>
             ))}
