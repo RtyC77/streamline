@@ -47,6 +47,15 @@ function prepare(
 }
 afterEach(() => vi.unstubAllGlobals());
 describe("Captura respeita o navegador", () => {
+  it.each([{resolution:480 as const,fps:24 as const},{resolution:480 as const,fps:30 as const},{resolution:720 as const,fps:24 as const}])('aplica perfil %o na captura',async profile=>{
+    const p=prepare();const result=await captureGame(profile);expect(result.profile).toEqual(profile);
+    expect(p.track.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({height:{ideal:profile.resolution,max:profile.resolution},frameRate:{ideal:profile.fps,max:profile.fps}}));
+  });
+  it('aplica 480p24 também no encoder',async()=>{
+    const params={encodings:[{}]};const sender={track:{kind:'video',getSettings:()=>({width:1280,height:720})},getParameters:()=>params,setParameters:vi.fn()};
+    await tuneSender(sender as unknown as RTCRtpSender,1_200_000,{resolution:480,fps:24});
+    expect(sender.setParameters).toHaveBeenCalledWith(expect.objectContaining({encodings:[expect.objectContaining({maxBitrate:1_200_000,maxFramerate:24,scaleResolutionDownBy:1.5})]}));
+  });
   it("solicita apenas áudio da janela e exclui áudio global sem fallback", async () => {
     const p = prepare(true);
     await captureGame();

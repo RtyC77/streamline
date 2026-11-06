@@ -16,12 +16,19 @@ export interface Room {
 export interface Snapshot {
   room: Room;
   members: Member[];
+  streams?: RoomStream[];
+}
+export interface RoomStream {broadcaster_id:string;session_id:string}
+export function activeStreams(snapshot:Snapshot):RoomStream[]{
+  return snapshot.streams ?? (snapshot.room.broadcaster_id && snapshot.room.stream_session ? [{broadcaster_id:snapshot.room.broadcaster_id,session_id:snapshot.room.stream_session}] : []);
 }
 export interface Entry extends Snapshot {
   invite?: string;
 }
 export type SignalBody =
-  | { kind: "watch" }
+  | { kind: "watch"; preview?: boolean }
+  | { kind: "unwatch" }
+  | { kind: "ice-batch"; candidates: RTCIceCandidateInit[] }
   | { kind: "offer" | "answer"; sdp: string }
   | { kind: "ice"; candidate: RTCIceCandidateInit };
 export type Signal = SignalBody & {
@@ -31,6 +38,7 @@ export type Signal = SignalBody & {
   client: string;
 };
 export interface PeerMetric {
+  connection?: string;
   id: string;
   direction: string;
   fps?: number;
@@ -47,6 +55,8 @@ export interface PeerMetric {
   limitation?: string;
 }
 export interface MediaState {
+  captureAudio?: string;
+  selected?: string | null;
   sharing: boolean;
   remote: MediaStream | null;
   audio: string;

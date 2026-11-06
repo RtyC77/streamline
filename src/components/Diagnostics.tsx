@@ -21,7 +21,7 @@ export function Diagnostics({
         </p>
       ) : (
         metrics.map((m) => (
-          <div key={m.id} className="metric-peer">
+          <div key={`${m.id}:${m.connection??m.direction}`} className="metric-peer">
             <strong>
               {members.find((p) => p.user_id === m.id)?.nickname} ·{" "}
               {m.direction}

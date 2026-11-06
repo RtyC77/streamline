@@ -248,6 +248,8 @@ describe("Ciclo da sala e respostas concorrentes", () => {
       c.info.stream,
       sid,
       "Sem áudio",
+      undefined,
+      null,
     );
     expect(c.track.stop).not.toHaveBeenCalled();
     await session.close();

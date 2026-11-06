@@ -1,19 +1,23 @@
 import { useEffect, useRef } from "react";
 import { Icon } from "./Icon";
+import {defaultProfile,videoProfile,type CaptureProfile} from '../media/profile';
 export function Settings({
   onClose,
   diagnostics,
   onDiagnostics,
   audio,
   connection,
+  profile=defaultProfile,
 }: {
   onClose: () => void;
   diagnostics: boolean;
   onDiagnostics: (v: boolean) => void;
   audio: string;
   connection: string;
+  profile?: CaptureProfile;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const target=videoProfile(profile);
   useEffect(() => {
     ref.current?.showModal();
   }, []);
@@ -33,15 +37,15 @@ export function Settings({
       <dl className="settings-list">
         <div>
           <dt>Resolução desejada</dt>
-          <dd>1280 × 720</dd>
+          <dd>{target.width} × {target.height}</dd>
         </div>
         <div>
           <dt>FPS máximo desejado</dt>
-          <dd>30 FPS</dd>
+          <dd>{target.fps} FPS</dd>
         </div>
         <div>
           <dt>Bitrate por espectador</dt>
-          <dd>Inicial 3 · ajuste 2,5–3 Mbps</dd>
+          <dd>Inicial {(target.bitrate/1_000_000).toLocaleString('pt-BR')} · ajuste {(target.minBitrate/1_000_000).toLocaleString('pt-BR')}–{(target.bitrate/1_000_000).toLocaleString('pt-BR')} Mbps</dd>
         </div>
         <div>
           <dt>Codec preferido</dt>

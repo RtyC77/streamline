@@ -2,6 +2,8 @@
 
 **Estado: pendente.** Esta lista é um roteiro para produzir evidência. Nenhum item manual está marcado como realizado na entrega local. Registre data, versão do navegador/Windows, GPU, rede, número de espectadores e resultado real de cada passo. Não cole SDP, candidatos ICE, convites, JWTs ou credenciais TURN em registros públicos.
 
+O checklist específico de três telas, perfis 480p/720p e prévias está em [MULTITELAS.md](MULTITELAS.md). Os testes nativos locais estão registrados em [RESULTADOS-MULTITELAS.json](RESULTADOS-MULTITELAS.json); não validam redes distintas nem áudio.
+
 ## Preparação
 
 - [ ] Migrations aplicadas em um projeto Supabase dedicado, Auth anônimo habilitado, RLS ativa e canais públicos desativados.
@@ -14,7 +16,7 @@
 
 1. No PC A, entre no site, escolha um apelido e crie uma sala.
 2. Copie o convite e abra-o no PC B. Escolha outro apelido e entre. Verifique ambos na lista.
-3. No PC A, clique em **Compartilhar jogo**. Escolha uma janela real de jogo no seletor do navegador. Autorize áudio se oferecido.
+3. No PC A, clique em **Compartilhar jogo**. Escolha resolução e FPS, clique em Escolher janela e compartilhar e escolha uma janela real de jogo no seletor do navegador. Autorize áudio se oferecido.
 4. No PC B, confirme que a imagem corresponde ao jogo e se move em tempo real. Se houver botão de reprodução, clique nele.
 5. Reproduza um som identificável no jogo. Confirme audibilidade no PC B e compare com a indicação de trilha capturada. A presença de uma trilha sozinha não conta como teste de som.
 6. Abra Configurações → Diagnóstico. Registre resolução, FPS, bitrate, codec, RTT, perdas, ICE e rota reais quando disponíveis. Verifique o alvo 720p30 onde suportado; não reprove negociação válida apenas por usar um fallback de codec.

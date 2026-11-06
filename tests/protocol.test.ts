@@ -10,6 +10,12 @@ const base = {
   client: crypto.randomUUID(),
 };
 describe("Convites e mensagens não confiáveis", () => {
+  it('limita o tamanho dos lotes ICE e rejeita solicitação de prévia inválida',()=>{
+    const candidate={candidate:'candidate:x',sdpMid:'0',sdpMLineIndex:0};
+    expect(parseSignal({...base,kind:'ice-batch',candidates:[candidate]})).not.toBeNull();
+    for(const candidates of [[],Array(17).fill(candidate),[{candidate:123}]])expect(parseSignal({...base,kind:'ice-batch',candidates})).toBeNull();
+    expect(parseSignal({...base,kind:'watch',preview:'true'})).toBeNull();
+  });
   it("aceita código e URL com fragmento, sem confundir UUID da sala com autorização", () => {
     const token = "a".repeat(64);
     expect(parseInvite(token)).toBe(token);

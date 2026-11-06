@@ -60,3 +60,7 @@ Compare o painel Usage/Realtime antes e depois com o mesmo número de usuários 
 ## Salas configuráveis e cache
 
 A revisão com salas de 2 a 8 pessoas está descrita em [CAPACIDADE.md](CAPACIDADE.md). Inclui reutilização do snapshot de admissão (uma RPC a menos na inicialização rápida), descarte antecipado de eventos de outro destinatário, deduplicação dos callbacks Presence e cache de assets com hash. As cadências permanecem 20/30 segundos. Não foram medidos percentuais novos de economia de CPU ou fatura.
+
+## Até três transmissores
+
+Consulte [MULTITELAS.md](MULTITELAS.md): uma tela de mídia recebida por pessoa, até duas prévias estáticas obtidas sob demanda por DataChannel, candidatos ICE em lotes e perfis leves. As transmissões reutilizam o WebSocket, os tópicos e o heartbeat existentes; não adicionam polling por tela.

@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-06",
+  "environment": "Mesmo navegador, quatro identidades locais e vídeo sintético. Sem Supabase gerenciado, áudio ou rede entre PCs.",
+  "checks": [
+    "Primeiro quadro capturado na fonte 1",
+    "Primeiro quadro capturado na fonte 2",
+    "Primeiro quadro capturado na fonte 3",
+    "Primeira tela recebida via WebRTC nativo",
+    "Duas prévias entregues por RTCDataChannel sem mídia contínua",
+    "Último quadro capturado uma vez ao trocar de tela",
+    "Troca para a segunda tela funciona",
+    "Troca para a terceira tela funciona",
+    "Espectador mantém apenas um receptor de mídia ao vivo",
+    "Duas pessoas transmitem e assistem uma à outra simultaneamente",
+    "Conexões de mídia estabelecidas com transportes nativos",
+    "Candidatos ICE enviados em lotes",
+    "Conexões encerradas ao sair"
+  ],
+  "messages": 67,
+  "warnings": []
+}

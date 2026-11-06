@@ -1,9 +1,10 @@
-import { target } from "../config";
+import {defaultProfile,videoProfile,type CaptureProfile} from './profile';
 export interface CaptureInfo {
   stream: MediaStream;
   settings: MediaTrackSettings;
   audio: string;
   tuning: string;
+  profile?: CaptureProfile;
 }
 export function captureSupported() {
   return (
@@ -12,7 +13,8 @@ export function captureSupported() {
     typeof RTCPeerConnection !== "undefined"
   );
 }
-export async function captureGame(): Promise<CaptureInfo> {
+export async function captureGame(profile:CaptureProfile=defaultProfile): Promise<CaptureInfo> {
+  const target=videoProfile(profile);
   if (!captureSupported())
     throw new Error(
       "Use Chrome ou Edge atualizado em HTTPS (ou localhost) para compartilhar.",
@@ -77,6 +79,7 @@ export async function captureGame(): Promise<CaptureInfo> {
   video.contentHint = "motion";
   return {
     stream,
+    profile,
     settings: video.getSettings(),
     tuning,
     audio: stream.getAudioTracks().length
@@ -105,7 +108,8 @@ export function preferCodecs(pc: RTCPeerConnection) {
     }
   }
 }
-export async function tuneSender(sender: RTCRtpSender, bitrate: number) {
+export async function tuneSender(sender: RTCRtpSender, bitrate: number, profile:CaptureProfile=defaultProfile) {
+  const target=videoProfile(profile);
   if (sender.track?.kind !== "video") return;
   const params = sender.getParameters();
   if (!params.encodings?.length) return;

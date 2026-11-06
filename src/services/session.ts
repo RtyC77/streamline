@@ -1,6 +1,8 @@
 import type { CaptureInfo } from "../media/capture";
+import {firstStill} from '../media/still';
 import { Peers } from "../media/peers";
 import type { MediaState, PeerMetric, Snapshot } from "../types";
+import {activeStreams} from '../types';
 import { claimStream, leaveRoom, pulse, releaseStream, tabId } from "./rooms";
 import { kickMember } from "./rooms";
 import { Signaling } from "./signaling";
@@ -11,6 +13,7 @@ import {
   BACKGROUND_LEAVE_MESSAGE,
 } from "./background-timeout";
 export interface SessionCallbacks {
+  preview?: (session:string,image:string)=>void;
   snapshot: (s: Snapshot) => void;
   media: (m: MediaState) => void;
   metrics: (m: PeerMetric[]) => void;
@@ -80,6 +83,7 @@ export class RoomSession {
         if (this.diagnostics) this.callbacks.metrics(metrics);
       },
       this.callbacks.error,
+      (session,image)=>this.callbacks.preview?.(session,image),
     );
     this.signaling = new Signaling(
       this.state.room.id,
@@ -149,6 +153,9 @@ export class RoomSession {
   };
   private async apply(state: Snapshot) {
     if (this.closed) return;
+    if(this.session&&!activeStreams(state).some(s=>s.broadcaster_id===this.self&&s.session_id===this.session)){
+      this.session=null;this.peers?.stopLocal();this.background?.refresh();
+    }
     if (this.applied && sameSnapshot(this.state, state)) return;
     this.applied = true;
     this.state = state;
@@ -220,6 +227,7 @@ export class RoomSession {
     this.background?.refresh();
     let claimed: string | null = null;
     try {
+      const poster=await firstStill(capture.stream);
       await this.enqueue(async () => {
         if (this.closed || !this.peers || !this.connected)
           throw new Error(
@@ -244,7 +252,7 @@ export class RoomSession {
           capture.stream.getVideoTracks()[0]?.readyState !== "live"
         )
           throw new Error("A sala ou a captura foi encerrada.");
-        this.peers?.setLocal(capture.stream, claimed, capture.audio);
+        this.peers?.setLocal(capture.stream, claimed, capture.audio,capture.profile,poster);
         capture.stream.getVideoTracks()[0].addEventListener(
           "ended",
           () => {
@@ -279,6 +287,12 @@ export class RoomSession {
     void this.signaling?.notifyChange().catch(this.callbacks.error);
     if (!this.closed) await this.tick(true);
   }
+  watch(session:string){
+    if(this.closed)return;
+    this.peers?.select(session);
+    if(this.connected)void this.peers?.maintain().catch(this.callbacks.error);
+  }
+  rememberPreview(session:string,image:string){this.peers?.rememberPreview(session);this.callbacks.preview?.(session,image);}
   async kick(user: string) {
     if (this.closed) return;
     await this.enqueue(async () => {

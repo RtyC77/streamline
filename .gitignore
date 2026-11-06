@@ -8,3 +8,4 @@ coverage/
 .wrangler/
 test-results/
 .tools/
+supabase/.temp/

@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, expect, vi } from "vitest";
+import { afterEach,beforeEach, describe, it, expect, vi } from "vitest";
 import { Peers } from "../src/media/peers";
 import type { MediaState, Signal, Snapshot } from "../src/types";
 const host = crypto.randomUUID(),
@@ -34,6 +34,8 @@ class FakeTrack {
   }
 }
 class FakePC {
+  data:{onopen:(()=>void)|null;onmessage:((e:{data:string})=>void)|null;onclose:(()=>void)|null;send:ReturnType<typeof vi.fn>;close:ReturnType<typeof vi.fn>}|null=null;
+  createDataChannel(){return this.data={onopen:null,onmessage:null,onclose:null,send:vi.fn(),close:vi.fn()};}
   static all: FakePC[] = [];
   signalingState = "stable";
   connectionState = "new";
@@ -120,7 +122,43 @@ beforeEach(() => {
   vi.stubGlobal("MediaStream", FakeStream);
   vi.stubGlobal("RTCRtpReceiver", { getCapabilities: () => null });
 });
+afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();});
 describe("Negociação por espectador", () => {
+  it('troca a tela recebida sem encerrar a própria transmissão e separa conexões mútuas',async()=>{
+    const h=setup(host,hc),otherSession=crypto.randomUUID();
+    h.manager.setSnapshot({...snapshot,streams:[{broadcaster_id:host,session_id:sid},{broadcaster_id:viewer,session_id:otherSession}]});
+    const stream=new FakeStream(),track=new FakeTrack();stream.addTrack(track);h.manager.setLocal(stream as unknown as MediaStream,sid,'Sem áudio');
+    h.manager.select(otherSession);
+    await h.manager.maintain();const incoming=FakePC.all[0];
+    h.manager.receive(viewer,{kind:'watch',to:host,session:sid,connection:crypto.randomUUID(),client:vc});await flush(100);
+    expect(FakePC.all).toHaveLength(2);expect(FakePC.all[1].added[0]).toBe(track);
+    h.manager.select(sid);expect(incoming.closed).toBe(true);expect(FakePC.all[1].closed).toBe(false);expect(track.readyState).toBe('live');
+    expect(h.messages.some(s=>s.kind==='unwatch'&&s.session===otherSession)).toBe(true);h.manager.dispose();
+  });
+  it('envia prévia pelo data channel sem trilhas de mídia e fecha após confirmação',async()=>{
+    const h=setup(host,hc),stream=new FakeStream(),track=new FakeTrack();stream.addTrack(track);
+    const image='data:image/jpeg;base64,YQ==';h.manager.setLocal(stream as unknown as MediaStream,sid,'Sem áudio',undefined,image);
+    h.manager.receive(viewer,{kind:'watch',preview:true,to:host,session:sid,connection:crypto.randomUUID(),client:vc});await flush(100);
+    const pc=FakePC.all[0];expect(pc.added).toHaveLength(0);expect(track.enabled).toBe(false);
+    pc.data?.onopen?.();expect(pc.data?.send).toHaveBeenCalledWith(image);
+    pc.data?.onmessage?.({data:'ack'});expect(pc.closed).toBe(true);expect(h.messages.every(s=>!JSON.stringify(s).includes('data:image'))).toBe(true);h.manager.dispose();
+  });
+  it('recebe somente uma tela ao vivo e busca prévias uma de cada vez',async()=>{
+    const v=setup(viewer,vc),other=crypto.randomUUID(),third=crypto.randomUUID(),s2=crypto.randomUUID(),s3=crypto.randomUUID();
+    v.manager.setSnapshot({...snapshot,members:[...snapshot.members,{user_id:other,client_id:crypto.randomUUID(),nickname:'B'},{user_id:third,client_id:crypto.randomUUID(),nickname:'C'}],streams:[{broadcaster_id:host,session_id:sid},{broadcaster_id:other,session_id:s2},{broadcaster_id:third,session_id:s3}]});
+    await v.manager.maintain();await v.manager.maintain();expect(FakePC.all).toHaveLength(2);
+    expect(v.messages.filter(s=>s.kind==='watch'&&!s.preview)).toHaveLength(1);expect(v.messages.filter(s=>s.kind==='watch'&&s.preview)).toHaveLength(1);
+    FakePC.all[1].data?.onclose?.();await v.manager.maintain();expect(FakePC.all).toHaveLength(3);
+    v.manager.select(s3);await v.manager.maintain();expect(FakePC.all[0].closed).toBe(true);expect(FakePC.all[2].closed).toBe(true);
+    expect(FakePC.all.filter(p=>!p.closed&&!p.data)).toHaveLength(1);v.manager.dispose();
+  });
+  it('agrupa ICE e cancela timers ao liberar a sessão',async()=>{
+    vi.useFakeTimers();const v=setup(viewer,vc);await v.manager.maintain();const pc=FakePC.all[0];
+    for(let i=0;i<5;i++)pc.onicecandidate?.({candidate:{toJSON:()=>({candidate:`candidate:${i}`,sdpMid:'0',sdpMLineIndex:0})}});
+    await vi.advanceTimersByTimeAsync(150);expect(v.messages.filter(s=>s.kind==='ice-batch')).toHaveLength(1);
+    expect(v.messages.find(s=>s.kind==='ice-batch')).toMatchObject({candidates:expect.arrayContaining([expect.objectContaining({candidate:'candidate:0'})])});
+    pc.onicecandidate?.({candidate:{toJSON:()=>({candidate:'late',sdpMid:'0',sdpMLineIndex:0})}});v.manager.dispose();expect(vi.getTimerCount()).toBe(0);
+  });
   it("não coleta getStats do espectador com diagnóstico fechado", async () => {
     const v = setup(viewer, vc);
     await v.manager.maintain();

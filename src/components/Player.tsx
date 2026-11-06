@@ -1,21 +1,32 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
+import {videoStill} from '../media/still';
 export function Player({
   stream,
   volume,
   onError,
+  onStill,
+  freeze,
 }: {
   stream: MediaStream;
   volume: number;
   onError: (message: string) => void;
+  onStill?: (image:string)=>void;
+  freeze?: {current:(()=>void)|null};
 }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const still=useRef(onStill);still.current=onStill;
   const [blocked, setBlocked] = useState(false);
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
     let active = true;
     video.srcObject = stream;
+    const save=()=>{const image=videoStill(video);if(image)still.current?.(image);};
+    let frozen=false;
+    const freezeNow=()=>{if(!frozen){save();frozen=true;}};
+    if(freeze)freeze.current=freezeNow;
+    video.addEventListener('loadeddata',save,{once:true});
     void video
       .play()
       .then(() => {
@@ -26,10 +37,12 @@ export function Player({
       });
     return () => {
       active = false;
+      freezeNow();video.removeEventListener('loadeddata',save);
+      if(freeze?.current===freezeNow)freeze.current=null;
       video.pause();
       video.srcObject = null;
     };
-  }, [stream]);
+  }, [stream,freeze]);
   useEffect(() => {
     if (ref.current) ref.current.volume = volume;
   }, [volume]);

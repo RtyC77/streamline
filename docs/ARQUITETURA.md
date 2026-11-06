@@ -1,5 +1,7 @@
 # Arquitetura e decisões
 
+> Multitelas: a migration 008 adiciona até três concessões independentes, seleção de uma tela, prévias P2P estáticas e perfis de captura. Veja [MULTITELAS.md](MULTITELAS.md).
+
 > Revisão de consumo: os intervalos e otimizações atuais estão em [DESEMPENHO.md](DESEMPENHO.md). Os prazos descritos abaixo registram o desenho inicial.
 
 ## Fluxo de confiança
@@ -16,7 +18,7 @@ sequenceDiagram
   S-->>B: associação validada + geração de canal
   A->>R: assina canal privado autorizado
   B->>R: assina canal privado autorizado
-  A->>S: claim_stream (concessão exclusiva)
+  A->>S: claim_stream (concessão individual, até três)
   B->>R: watch com sessão/conexão/destinatário
   R->>A: watch, remetente identificado pelo tópico
   A->>R: offer e ICE
@@ -26,15 +28,16 @@ sequenceDiagram
   A->>B: vídeo e áudio WebRTC (direto ou TURN)
 ```
 
-Supabase nunca recebe frames ou áudio. O serviço TURN, quando necessário, encaminha mídia WebRTC criptografada. STUN não é um relay. O frontend é estático e o único serviço privilegiado opcional fora do PostgreSQL é a função de emissão TURN.
+Supabase nunca recebe frames ou áudio. O serviço TURN, quando necessário, encaminha mídia WebRTC criptografada. STUN não é um relay. O frontend é estático e as operações privilegiadas fora do PostgreSQL ficam nas Edge Functions de administração e TURN.
 
 ## Dados e autorização
 
-- `rooms`: expiração, geração de canal, usuário transmissor, UUID da sessão e prazo da concessão.
+- `rooms`: nome, capacidade, criador, expiração e geração de canal.
+- `room_streams`: transmissor, UUID da sessão e expiração da concessão; até três concessões ativas por sala.
 - `room_members`: usuário autenticado, apelido, UUID da aba e heartbeat. Chave única por sala/usuário.
 - `room_invites`: hash SHA-256 do convite e expiração. Não tem leitura pública nem por membros.
 - `private.attempts`: limitador persistente por usuário para entradas/criações/emissão TURN. Retorno de erro em JSON preserva o contador mesmo em tentativas inválidas; exceções PostgreSQL fariam rollback do incremento.
-- Transações bloqueiam a linha da sala para limitar capacidade e conceder um transmissor. Criação também usa advisory lock por usuário e limita três salas/hora.
+- Transações bloqueiam a linha da sala para limitar capacidade e conceder até três transmissores. Criação também usa advisory lock por usuário e limita três salas/hora.
 - RLS permite leitura somente com associação recente e sala não expirada; nenhuma escrita direta é concedida ao cliente. Helpers privilegiados não são executáveis pelo usuário, exceto as funções de autorização necessárias às políticas.
 
 O canal é `room:<sala>:<geração>:user:<remetente>`. Membros ativos recebem nos tópicos de membros da sala; só o dono pode publicar em seu tópico. O handler deriva a identidade do remetente a partir do canal autorizado, valida a mensagem e confere seu `client_id` contra o snapshot do banco. Não confia em `from` ou em campos arbitrários de Presence.
@@ -45,9 +48,9 @@ Todos os participantes com convite têm autorização de transmissão no MVP. N�
 
 ## Ciclo de mídia
 
-Uma única chamada `getDisplayMedia()` acontece diretamente no clique do usuário, antes de qualquer RPC que consuma a ativação transitória. O stream é encerrado se a concessão exclusiva falhar. Track `ended` dispara a mesma limpeza de **Parar transmissão**.
+Uma única chamada `getDisplayMedia()` acontece diretamente no clique do usuário, antes de qualquer RPC que consuma a ativação transitória. O stream é encerrado se a concessão individual falhar. Track `ended` dispara a mesma limpeza de **Parar transmissão**.
 
-O transmissor é sempre o único criador de ofertas. Cada espectador solicita uma conexão com UUID novo e responde à oferta. Processamento SDP é serializado; candidatos são enfileirados até `remoteDescription`. Mensagens de outra sessão, de outro client ou de uma conexão anterior são descartadas. Assim não há dois offerers concorrentes. O servidor concede apenas uma sessão de transmissão. Um Broadcast `state-changed` antecipa a leitura do estado ao iniciar/parar, limitado a uma atualização por segundo; o payload não é autoridade e o snapshot é sempre relido no servidor.
+Cada transmissor cria ofertas apenas para sua própria sessão. Cada espectador solicita uma conexão com UUID novo e responde à oferta. Processamento SDP é serializado; candidatos são enfileirados até `remoteDescription`. Mensagens de outra sessão, de outro client ou de uma conexão anterior são descartadas. As direções de envio e recebimento têm conexões independentes, permitindo compartilhamento mútuo sem glare. O servidor concede até três sessões de transmissão; cada pessoa recebe apenas a tela selecionada ao vivo. Um Broadcast `state-changed` antecipa a leitura do estado ao iniciar/parar, limitado a uma atualização por segundo; o payload não é autoridade e o snapshot é sempre relido no servidor.
 
 Um peer é criado por espectador, reutilizando as trilhas da mesma captura. Watch repetido não cria peer duplicado. Novos espectadores obtêm a sessão atual via heartbeat e pedem a conexão. Falhas ICE no transmissor disparam restart limitado a três tentativas por peer; espectadores que continuam sem conexão reconstruem o peer após 20 s. Uma nova sessão fecha a anterior. Sem peers, as trilhas são desativadas; ao parar ou sair, são encerradas.
 
@@ -70,7 +73,7 @@ Depois de uma suspensão longa, o usuário pode precisar usar o convite novament
 
 ## Desempenho e limites
 
-Captura nativa sem canvas, filtros, gravação ou análise de frames. Preferências de codec vêm de `RTCRtpReceiver.getCapabilities()` e mantêm fallbacks. O sender limita FPS, escala e teto de bitrate com parâmetros suportados; erros de aplicação desses parâmetros não bloqueiam uma negociação que o navegador consegue realizar.
+A mídia usa captura nativa, sem pipeline de canvas, filtros, gravação ou análise contínua de frames. Apenas as imagens estáticas usam canvas pontual, conforme MULTITELAS.md. Preferências de codec vêm de `RTCRtpReceiver.getCapabilities()` e mantêm fallbacks. O sender limita FPS, escala e teto de bitrate com parâmetros suportados; erros de aplicação desses parâmetros não bloqueiam uma negociação que o navegador consegue realizar.
 
 `getStats()` é coletado por peer sem imprimir SDP, ICE, endereços ou tokens. Bitrate é a diferença de bytes por tempo; a primeira amostra não tem bitrate. A rota vem do par selecionado e dos tipos dos candidatos. Métricas ausentes aparecem como indisponíveis. RTT e motivo `bandwidth` do encoder orientam o teto; perdas cumulativas são exibidas, sem serem tratadas erroneamente como uma taxa de perda.
 

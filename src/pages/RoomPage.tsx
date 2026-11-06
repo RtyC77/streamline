@@ -3,6 +3,9 @@ import { Brand, Icon } from "../components/Icon";
 import { Player } from "../components/Player";
 import { Diagnostics } from "../components/Diagnostics";
 import { Settings } from "../components/Settings";
+import {ShareOptions} from '../components/ShareOptions';
+import {activeStreams} from '../types';
+import {defaultProfile,type CaptureProfile} from '../media/profile';
 import { captureGame, captureSupported } from "../media/capture";
 import { inviteLink } from "../services/rooms";
 import { explain } from "../services/errors";
@@ -28,6 +31,14 @@ export function RoomPage({
   onLeave: (reason?: string) => void;
 }) {
   const [snapshot, setSnapshot] = useState(initial);
+  const streams=activeStreams(snapshot);
+  const [posters,setPosters]=useState<Record<string,string>>({});
+  const [shareOptions,setShareOptions]=useState(false);
+  const [profile,setProfile]=useState<CaptureProfile>(defaultProfile);
+  const freeze=useRef<(()=>void)|null>(null);
+  const savePoster=useCallback((session:string,image:string)=>setPosters(previous=>previous[session]===image?previous:{...previous,[session]:image}),[]);
+  const streamKey=streams.map(s=>s.session_id).sort().join(',');
+  useEffect(()=>{setPosters(previous=>{const next=Object.fromEntries(Object.entries(previous).filter(([id])=>streamKey.split(',').includes(id)));return Object.keys(next).length===Object.keys(previous).length?previous:next;});},[streamKey]);
   const capacity = snapshot.room.max_members ?? 5;
   const [media, setMedia] = useState(initialMedia);
   const [metrics, setMetrics] = useState<PeerMetric[]>([]);
@@ -69,6 +80,7 @@ export function RoomPage({
       expired: (reason) => {
         if (!cancelled) onLeave(reason);
       },
+      preview:savePoster,
     });
     session.current = controller;
     void controller
@@ -91,18 +103,20 @@ export function RoomPage({
       window.removeEventListener("pageshow", show);
       void controller.close();
     };
-  }, [initial, self, report, onLeave]);
+  }, [initial, self, report, onLeave,savePoster]);
+  const selected=streams.find(s=>s.session_id===media.selected);
   const host = snapshot.members.find(
-    (m) => m.user_id === snapshot.room.broadcaster_id,
+    (m) => m.user_id === selected?.broadcaster_id,
   );
-  const share = async () => {
+  const share = async (requested:CaptureProfile) => {
     if (sharingBusy) return;
     setSharingBusy(true);
     setError("");
     setNotice("");
     try {
       // getDisplayMedia runs immediately within the click gesture, before RPCs.
-      const capture = await captureGame();
+      const capture = await captureGame(requested);
+      setProfile(requested);setShareOptions(false);
       if (!session.current) {
         capture.stream.getTracks().forEach((t) => t.stop());
         return;
@@ -189,12 +203,12 @@ export function RoomPage({
                     )}
                   </strong>
                   <span>
-                    {m.user_id === snapshot.room.broadcaster_id
+                    {streams.some(s=>s.broadcaster_id===m.user_id)
                       ? "Transmitindo agora"
                       : "Na sala"}
                   </span>
                 </div>
-                {m.user_id === snapshot.room.broadcaster_id && (
+                {streams.some(s=>s.broadcaster_id===m.user_id) && (
                   <Icon name="screen" size={17} />
                 )}
                 {snapshot.room.created_by === self && m.user_id !== self && (
@@ -271,9 +285,15 @@ export function RoomPage({
             <Icon name="chart" />
           </button>
         </div>
+        {streams.length>0&&<div className="stream-picker" aria-label="Telas compartilhadas">
+          {streams.map(stream=>{const member=snapshot.members.find(m=>m.user_id===stream.broadcaster_id);const current=stream.session_id===media.selected;return <button key={stream.session_id} className={`stream-tile ${current?'selected':''}`} aria-pressed={current} onClick={()=>{if(!current){freeze.current?.();session.current?.watch(stream.session_id);}}}>
+            <div className="stream-still">{posters[stream.session_id]?<img src={posters[stream.session_id]} alt="Quadro congelado da transmissão"/>:<Icon name="screen" size={28}/>}<span>{current?'Selecionada':posters[stream.session_id]?'Congelada':'Prévia indisponível'}</span></div>
+            <strong>{member?.nickname??'Participante'}{stream.broadcaster_id===self?' · você':''}</strong>
+          </button>;})}
+        </div>}
         <div className="stage" ref={stage}>
           {media.remote ? (
-            <Player stream={media.remote} volume={volume} onError={setError} />
+            <Player key={media.selected} stream={media.remote} volume={volume} onError={setError} freeze={freeze} onStill={image=>{if(media.selected)session.current?.rememberPreview(media.selected,image);}}/>
           ) : (
             <div className="stage-empty">
               <div
@@ -285,26 +305,26 @@ export function RoomPage({
               {(media.sharing || host) && (
                 <>
                   <span className="stage-eyebrow">
-                    {media.sharing
+                    {selected?.broadcaster_id===self
                       ? "SEU JOGO ESTÁ AO VIVO"
                       : "CONECTANDO AO JOGO"}
                   </span>
                   <h2>
-                    {media.sharing
+                    {selected?.broadcaster_id===self
                       ? "Pode voltar para o jogo."
                       : "Preparando a transmissão…"}
                   </h2>
                   <p>
-                    {media.sharing
+                    {selected?.broadcaster_id===self
                       ? `${media.connections} espectador(es) conectado(s). Sem prévia local para poupar recursos.`
                       : "Estabelecendo uma conexão direta e segura com o transmissor."}
                   </p>
                 </>
               )}
-              {!host && !media.sharing && (
+              {!host && !media.sharing && streams.length<3 && (
                 <button
                   className="primary"
-                  onClick={() => void share()}
+                  onClick={() => setShareOptions(true)}
                   disabled={
                     !ready ||
                     connection !== "Conectado" ||
@@ -319,7 +339,7 @@ export function RoomPage({
               <span className="stage-hint">
                 {media.sharing
                   ? "Encerre aqui ou no controle do navegador."
-                  : "720p · 30 FPS desejados · áudio quando disponível"}
+                  : "Escolha uma tela para assistir · até 3 compartilhamentos"}
               </span>
             </div>
           )}
@@ -355,11 +375,11 @@ export function RoomPage({
                 disabled={
                   !ready ||
                   connection !== "Conectado" ||
-                  !!host ||
+                  streams.length>=3 ||
                   sharingBusy ||
                   !captureSupported()
                 }
-                onClick={() => void share()}
+                onClick={() => setShareOptions(true)}
               >
                 <Icon name="screen" size={18} />
                 {sharingBusy ? "Preparando…" : "Compartilhar jogo"}
@@ -440,19 +460,20 @@ export function RoomPage({
             Mais jogo, menos consumo.
             <span>
               {" "}
-              Captura nativa, sem filtros e sem processamento de vídeo em
-              JavaScript.
+              Uma tela ao vivo por vez. As demais usam apenas imagens congeladas.
             </span>
           </p>
         </div>
       </main>
+      {shareOptions&&<ShareOptions initial={profile} onClose={()=>setShareOptions(false)} onShare={requested=>void share(requested)}/>}
       {settings && (
         <Settings
           onClose={() => setSettings(false)}
           diagnostics={diagnostics}
           onDiagnostics={setDiagnostics}
-          audio={media.audio}
+          audio={media.sharing?(media.captureAudio??media.audio):media.audio}
           connection={connection}
+          profile={profile}
         />
       )}
     </div>

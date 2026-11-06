@@ -1,4 +1,5 @@
 import type { Snapshot } from "../types";
+import {activeStreams} from '../types';
 export const cadence = {
   maintenance: 5_000,
   viewerPulse: 30_000,
@@ -16,6 +17,8 @@ export function sameSnapshot(a: Snapshot, b: Snapshot) {
     a.room.channel_epoch === b.room.channel_epoch &&
     a.room.broadcaster_id === b.room.broadcaster_id &&
     a.room.stream_session === b.room.stream_session &&
+    activeStreams(a).length === activeStreams(b).length &&
+    activeStreams(a).every(s=>activeStreams(b).some(t=>s.session_id===t.session_id&&s.broadcaster_id===t.broadcaster_id)) &&
     a.members.length === b.members.length &&
     a.members.every((m) =>
       b.members.some(

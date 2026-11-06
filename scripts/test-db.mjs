@@ -428,6 +428,30 @@ try {
   await denied(()=>db.query('update public.rooms set max_members=8 where id=$1',[small.room.id]),'participante não altera limite diretamente');
   await admin('reset role');await denied(()=>db.query('update public.rooms set max_members=9 where id=$1',[large.room.id]),'constraint impede capacidade acima de oito');
   await db.exec('set role anon');await denied(()=>rpc('create_room',['Intruso',tabs[9],8]),'anônimo sem autenticação não cria sala pela nova RPC');
+  await as(8);const legacySession=await rpc('claim_stream',[large.room.id,tabs[8]]);
+  await db.exec('reset role');await db.exec(await readFile(new URL('../supabase/migrations/202611060008_multi_stream.sql',import.meta.url),'utf8'));
+  await as(8);ok((await rpc('room_pulse',[large.room.id,tabs[8],legacySession])).streams.some(s=>s.session_id===legacySession),'migration preserva transmissão ativa anterior');
+  await rpc('release_stream',[large.room.id,tabs[8],legacySession]);
+  await admin('delete from private.attempts');await as(9);
+  const multi=await rpc('create_room',['Multi',tabs[9],8]);
+  for(const i of [0,1,2,8]){await as(i);await rpc('join_room',[multi.invite,`Pessoa ${i}`,tabs[i]]);}
+  const sessions=[];
+  for(const i of [9,0,1]){await as(i);sessions.push(await rpc('claim_stream',[multi.room.id,tabs[i]]));}
+  await as(9);await denied(()=>rpc('claim_stream',[multi.room.id,tabs[9]]),'mesmo participante não ocupa duas transmissões');
+  await as(2);await denied(()=>rpc('claim_stream',[multi.room.id,tabs[2]]),'quarta transmissão simultânea recusada');
+  let multiState=await rpc('room_pulse',[multi.room.id,tabs[2],null]);ok(multiState.streams.length===3,'snapshot devolve três transmissões independentes');
+  await rpc('release_stream',[multi.room.id,tabs[2],sessions[0]]);ok((await rpc('room_pulse',[multi.room.id,tabs[2],null])).streams.length===3,'espectador não encerra transmissão alheia');
+  await as(9);await rpc('release_stream',[multi.room.id,tabs[9],crypto.randomUUID()]);ok((await rpc('room_pulse',[multi.room.id,tabs[9],sessions[0]])).streams.length===3,'sessão antiga não encerra transmissão atual');
+  await admin('update public.room_streams set expires_at=now()-interval \'1 second\' where room_id=$1 and user_id=$2',[multi.room.id,ids[0]]);
+  await as(2);const replacement=await rpc('claim_stream',[multi.room.id,tabs[2]]);ok(typeof replacement==='string','lease expirada libera vaga sem adicionar timer de banco');
+  await as(9);await rpc('kick_member',[multi.room.id,tabs[9],ids[1]]);ok(!(await rpc('room_pulse',[multi.room.id,tabs[9],sessions[0]])).streams.some(s=>s.broadcaster_id===ids[1]),'expulsão remove apenas transmissão do participante');
+  await as(2);await rpc('leave_room',[multi.room.id,tabs[2]]);await as(9);ok((await rpc('room_pulse',[multi.room.id,tabs[9],sessions[0]])).streams.length===1,'saída libera transmissão por cascade');
+  await as(8);await denied(()=>db.query('insert into public.room_streams(room_id,user_id) values($1,$2)',[multi.room.id,ids[8]]),'cliente não insere concessão diretamente');
+  await as(7);ok((await db.query('select * from public.room_streams where room_id=$1',[multi.room.id])).rows.length===0,'RLS oculta transmissões de intruso');
+  await admin('update public.room_members set last_seen=now()-interval \'61 seconds\' where room_id=$1 and user_id=$2',[multi.room.id,ids[8]]);
+  await as(8);await denied(()=>rpc('room_pulse',[multi.room.id,tabs[8],null]),'heartbeat não ressuscita associação expirada');
+  await db.exec('reset role;set role service_role');await rpc('admin_close_room',[multi.room.id]);
+  ok((await admin('select * from public.room_streams where room_id=$1',[multi.room.id])).rows.length===0,'administrador finaliza todas as transmissões da sala');
   console.log(
     `\n${checks} verificações SQL passaram em PostgreSQL WASM (PGlite). Realtime gerenciado exige teste separado.`,
   );

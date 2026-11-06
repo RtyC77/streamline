@@ -1,8 +1,10 @@
 # StreamLite
 
-Compartilhamento privado de jogos entre amigos, no navegador. React + TypeScript estrito + Vite, Supabase Auth/PostgreSQL/Realtime e WebRTC P2P nativo. Interface em português brasileiro, sem voz, webcam, chat, gravação ou processamento de frames.
+Compartilhamento privado de jogos entre amigos, no navegador. React + TypeScript estrito + Vite, Supabase Auth/PostgreSQL/Realtime e WebRTC P2P nativo. Interface em português brasileiro, sem voz, webcam, chat, gravação ou processamento contínuo de frames.
 
 **Estado da entrega:** implementação local compilável, com testes automatizados. Para uso real é necessário configurar seu projeto Supabase e publicar em HTTPS. A transmissão e o áudio entre computadores diferentes ainda precisam da validação descrita em [docs/VALIDACAO.md](docs/VALIDACAO.md). Não há transmissão demonstrativa ou backend simulado na aplicação.
+
+Até três pessoas podem compartilhar telas, com uma tela recebida ao vivo por espectador e miniaturas congeladas. Captura em 480p/720p e 24/30 FPS. Aplique a migration `202611060008_multi_stream.sql` depois das anteriores e atualize todos os clientes: [ativação e testes](docs/MULTITELAS.md).
 
 A revisão de consumo, os resultados reproduzíveis e a migration adicional estão em [docs/DESEMPENHO.md](docs/DESEMPENHO.md).
 

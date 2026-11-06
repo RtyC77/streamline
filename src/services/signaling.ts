@@ -11,7 +11,9 @@ export function parseSignal(value: unknown): Signal | null {
     )
   )
     return null;
-  if (m.kind === "watch") return m as Signal;
+  if (m.kind === "watch" && (m.preview===undefined||typeof m.preview==='boolean')) return m as Signal;
+  if (m.kind === 'unwatch') return m as Signal;
+  if (m.kind === 'ice-batch' && Array.isArray(m.candidates) && m.candidates.length>0 && m.candidates.length<=16 && m.candidates.every(candidate=>parseSignal({...m,kind:'ice',candidate})!==null))return m as Signal;
   if (
     (m.kind === "offer" || m.kind === "answer") &&
     typeof m.sdp === "string" &&
