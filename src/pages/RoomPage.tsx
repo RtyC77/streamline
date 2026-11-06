@@ -45,16 +45,18 @@ export function RoomPage({
     session.current?.setDiagnostics(diagnostics);
   }, [diagnostics]);
   useEffect(() => {
+    let cancelled = false;
     const controller = new RoomSession(initial, self, {
       snapshot: setSnapshot,
       media: setMedia,
       metrics: setMetrics,
       error: report,
       connection: setConnection,
-      expired: onLeave,
+      expired: (reason) => {
+        if (!cancelled) onLeave(reason);
+      },
     });
     session.current = controller;
-    let cancelled = false;
     void controller
       .start()
       .then(() => {

@@ -132,6 +132,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("Ciclo da sala e respostas concorrentes", () => {
+  it("conclui a saída anterior antes de permitir uma nova entrada", async () => {
+    const page = Object.assign(new EventTarget(), {
+      visibilityState: "hidden",
+    });
+    vi.stubGlobal("document", page);
+    const pending = deferred<undefined>();
+    mocks.leave.mockReturnValueOnce(pending.promise);
+    const { session, expired } = setup();
+    await session.start();
+    await flush();
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(mocks.disposed).toHaveBeenCalled();
+    expect(expired).not.toHaveBeenCalled();
+    pending.resolve(undefined);
+    await flush();
+    expect(expired).toHaveBeenCalledOnce();
+  });
   it("encerra peers, associação e heartbeats ao expirar em segundo plano", async () => {
     const page = Object.assign(new EventTarget(), {
       visibilityState: "hidden",

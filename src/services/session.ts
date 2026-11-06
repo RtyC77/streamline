@@ -56,8 +56,12 @@ export class RoomSession {
         document,
         () => this.session !== null || this.starting,
         () => {
-          void this.close(true).catch(() => undefined);
-          this.callbacks.expired?.(BACKGROUND_LEAVE_MESSAGE);
+          this.callbacks.connection("Saindo por inatividade");
+          void this.close(true)
+            .catch(() => undefined)
+            .finally(() => {
+              this.callbacks.expired?.(BACKGROUND_LEAVE_MESSAGE);
+            });
         },
       );
     this.peers = new Peers(
