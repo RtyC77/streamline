@@ -8,6 +8,7 @@ import { inviteLink } from "../services/rooms";
 import { explain } from "../services/errors";
 import { RoomSession } from "../services/session";
 import type { MediaState, PeerMetric, Snapshot } from "../types";
+import {AdminEntry} from '../components/AdminEntry';
 const initialMedia: MediaState = {
   sharing: false,
   remote: null,
@@ -244,6 +245,7 @@ export function RoomPage({
       </aside>
       <main className="room-main">
         <header className="room-header">
+          <AdminEntry/>
           <span className="p2p-badge">
             <span className="status-dot" />
             WebRTC P2P

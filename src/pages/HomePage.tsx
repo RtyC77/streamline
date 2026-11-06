@@ -6,6 +6,7 @@ import { authenticate } from "../services/supabase";
 import { enter, parseInvite } from "../services/rooms";
 import { explain } from "../services/errors";
 import type { Entry } from "../types";
+import {AdminEntry} from '../components/AdminEntry';
 export function HomePage({
   onEnter,
   message,
@@ -49,6 +50,7 @@ export function HomePage({
     <div className="home">
       <header className="home-header">
         <Brand />
+        <AdminEntry/>
       </header>
       <main className="home-main">
         <div className="hero">

@@ -189,6 +189,10 @@ A reconciliação de segurança usa heartbeat a cada 20 segundos no transmissor 
 
 Antes de promover o MVP a validado: execute [docs/VALIDACAO.md](docs/VALIDACAO.md) em dois PCs e depois em cinco; teste rede móvel/CGNAT e TURN; meça o impacto no FPS do jogo, CPU/GPU pelo gerenciador do sistema e upload. Compare H.264 com o codec efetivamente negociado, sem presumir que uma preferência é mais eficiente naquele equipamento. Depois, avalie intervalos de heartbeat e políticas de bitrate baseados nessas medições. Não é necessário adicionar SFU ou uma infraestrutura permanente para esse grupo inicial.
 
+## 11. Administração de salas
+
+O botão **Administração** no topo permite listar e finalizar salas com credenciais verificadas por uma Edge Function. A lista é carregada somente quando solicitada. A ativação exige a migration `202611060005_admin.sql`, os segredos administrativos e o deploy da função `admin-panel`: siga [docs/ADMINISTRACAO.md](docs/ADMINISTRACAO.md). Finalizar uma sala invalida seu convite e libera sua vaga na cota de três salas recentes ativas por usuário.
+
 ## Referências técnicas
 
 - [Supabase: autorização Realtime e cache de políticas](https://supabase.com/docs/guides/realtime/authorization)

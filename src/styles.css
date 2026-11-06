@@ -1,3 +1,8 @@
+.admin-entry{font-size:11px;white-space:nowrap}
+.admin-dialog{width:min(680px,calc(100% - 24px));max-height:85dvh;overflow:auto}
+.admin-dialog form{margin-top:22px}.admin-dialog form input{margin-bottom:16px}.admin-dialog form button{margin-top:8px}
+.admin-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:24px}.admin-toolbar strong{flex:1;font-size:13px}
+.admin-rooms article{display:flex;align-items:center;justify-content:space-between;gap:15px;border-top:1px solid #303944;padding:16px 0}.admin-rooms article>div{min-width:0}.admin-rooms small{display:block;overflow-wrap:anywhere;color:#8b99aa;font-size:10px;margin-top:7px}.admin-rooms p{font-size:12px;margin:8px 0 0}.admin-rooms button{flex-shrink:0;font-size:11px;padding:9px}
 :root {
   font-family: Inter, "Segoe UI", system-ui, sans-serif;
   color: #e9ecf1;

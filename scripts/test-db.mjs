@@ -11,7 +11,7 @@ const ok = (value, message) => {
 };
 const ids = Array.from({ length: 8 }, () => randomUUID()),
   tabs = ids.map(() => randomUUID());
-await db.exec(`create role anon; create role authenticated; create schema auth; create schema realtime;
+await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth; create schema realtime;
  create table auth.users(id uuid primary key); grant usage on schema auth,realtime to authenticated;
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  create function realtime.topic() returns text language sql stable as $$ select current_setting('realtime.topic',true) $$;
@@ -49,6 +49,7 @@ await db.exec(
     "utf8",
   ),
 );
+await db.exec(await readFile(new URL('../supabase/migrations/202611060005_admin.sql',import.meta.url),'utf8'));
 async function as(i) {
   await db.exec("reset role");
   await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
@@ -392,6 +393,22 @@ try {
     () => rpc("create_room", ["Sem login", randomUUID()]),
     "usuário sem autenticação não executa RPC",
   );
+  await as(0);
+  await denied(()=>rpc('admin_list_rooms',[]),'participante não lista salas globalmente');
+  const first=await rpc('create_room',['Admin teste A',tabs[0]]);const second=await rpc('create_room',['Admin teste B',tabs[0]]);const third=await rpc('create_room',['Admin teste C',tabs[0]]);
+  ok(!first.error&&!second.error&&!third.error,'permite três salas recentes ativas');
+  ok(!!(await rpc('create_room',['Excedente',tabs[0]])).error,'quarta sala ativa é recusada');
+  await denied(()=>rpc('admin_close_room',[first.room.id]),'cliente não finaliza sala pela RPC administrativa');
+  await db.exec('reset role; set role service_role');
+  const listed=await rpc('admin_list_rooms',[]);ok(listed.some(r=>r.id===first.room.id),'administrador lista salas ativas');
+  ok(await rpc('admin_close_room',[first.room.id]),'administrador finaliza sala');
+  ok(!await rpc('admin_close_room',[first.room.id]),'finalização é idempotente');
+  ok(!(await rpc('admin_list_rooms',[])).some(r=>r.id===first.room.id),'sala finalizada sai da lista');
+  for(let i=0;i<20;i++)ok(await rpc('admin_login_gate',[]),'tentativa administrativa dentro do limite');
+  ok(!await rpc('admin_login_gate',[]),'limite de login persiste no banco');
+  await as(0);await denied(()=>rpc('room_pulse',[first.room.id,tabs[0],null]),'sala finalizada não renova participação');
+  ok(!!(await rpc('join_room',[first.invite,'Teste',tabs[0]])).error,'convite da sala finalizada é invalidado');
+  ok(!(await rpc('create_room',['Vaga liberada',tabs[0]])).error,'sala finalizada libera cota de criação');
   console.log(
     `\n${checks} verificações SQL passaram em PostgreSQL WASM (PGlite). Realtime gerenciado exige teste separado.`,
   );
