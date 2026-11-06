@@ -186,4 +186,3 @@ Antes de promover o MVP a validado: execute [docs/VALIDACAO.md](docs/VALIDACAO.m
 - [MDN: setParameters](https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpSender/setParameters)
 - [Supabase: autenticação em Edge Functions](https://supabase.com/docs/guides/functions/auth)
 - [Cloudflare Pages: configuração de build](https://developers.cloudflare.com/pages/configuration/build-configuration/)
-

@@ -1,0 +1,11 @@
+project_id = "streamlite"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+enable_anonymous_sign_ins = true
+
+[functions.turn-credentials]
+# The handler validates the user JWT with Auth and checks room membership via RLS.
+# This also works with asymmetric signing keys and new publishable keys.
+verify_jwt = false
