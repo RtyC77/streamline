@@ -56,19 +56,19 @@ describe("Captura respeita o navegador", () => {
     await tuneSender(sender as unknown as RTCRtpSender,1_200_000,{resolution:480,fps:24});
     expect(sender.setParameters).toHaveBeenCalledWith(expect.objectContaining({encodings:[expect.objectContaining({maxBitrate:1_200_000,maxFramerate:24,scaleResolutionDownBy:1.5})]}));
   });
-  it("solicita apenas áudio da janela e exclui áudio global sem fallback", async () => {
+  it("exclui áudio de janelas e do sistema sem fallback para microfone", async () => {
     const p = prepare(true);
     await captureGame();
     expect(p.display).toHaveBeenCalledWith(
       expect.objectContaining({
         systemAudio: "exclude",
-        windowAudio: "window",
+        windowAudio: "exclude",
       }),
     );
     expect(p.display).toHaveBeenCalledTimes(1);
     expect(p.mic).not.toHaveBeenCalled();
   });
-  it.each(["monitor", null] as const)(
+  it.each(["window", "monitor", null] as const)(
     "remove áudio de fonte %s antes de entregar a captura",
     async (surface) => {
       const p = prepare(true, true, surface);
@@ -101,9 +101,9 @@ describe("Captura respeita o navegador", () => {
     });
   });
   it("só informa trilha de áudio quando ela foi retornada", async () => {
-    prepare(true);
+    prepare(true,true,'browser');
     const result = await captureGame();
-    expect(result.audio).toBe("Trilha de áudio capturada");
+    expect(result.audio).toBe("Trilha de áudio da aba capturada");
   });
   it("encerra trilhas se o navegador não retornar vídeo", async () => {
     const p = prepare(true, false);

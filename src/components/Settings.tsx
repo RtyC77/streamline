@@ -57,7 +57,7 @@ export function Settings({
         </div>
         <div>
           <dt>Fonte de áudio permitida</dt>
-          <dd>Janela ou aba selecionada</dd>
+          <dd>Apenas a aba selecionada. Janelas e tela inteira ficam sem áudio.</dd>
         </div>
         <div>
           <dt>Sinalização</dt>
