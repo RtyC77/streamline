@@ -4,12 +4,17 @@ import type { MediaState, PeerMetric, Snapshot } from "../types";
 import { claimStream, leaveRoom, pulse, releaseStream, tabId } from "./rooms";
 import { Signaling } from "./signaling";
 import { iceConfiguration } from "./supabase";
+import {
+  BackgroundTimeout,
+  BACKGROUND_LEAVE_MESSAGE,
+} from "./background-timeout";
 export interface SessionCallbacks {
   snapshot: (s: Snapshot) => void;
   media: (m: MediaState) => void;
   metrics: (m: PeerMetric[]) => void;
   error: (e: unknown) => void;
   connection: (s: string) => void;
+  expired?: (message: string) => void;
 }
 export class RoomSession {
   private signaling: Signaling | null = null;
@@ -25,6 +30,7 @@ export class RoomSession {
   private starting = false;
   private iceRefreshed = Date.now();
   private diagnostics = false;
+  private background: BackgroundTimeout | null = null;
   private operations: Promise<void> = Promise.resolve();
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const next = this.operations.then(operation);
@@ -45,6 +51,15 @@ export class RoomSession {
   async start() {
     const config = await iceConfiguration(this.state.room.id);
     if (this.closed) return;
+    if (typeof document !== "undefined")
+      this.background = new BackgroundTimeout(
+        document,
+        () => this.session !== null || this.starting,
+        () => {
+          void this.close(true).catch(() => undefined);
+          this.callbacks.expired?.(BACKGROUND_LEAVE_MESSAGE);
+        },
+      );
     this.peers = new Peers(
       this.self,
       tabId(),
@@ -111,11 +126,13 @@ export class RoomSession {
     if (this.connected) await this.peers?.maintain();
   }
   private async tick() {
+    if (this.background?.refresh()) return;
     if (this.closed || this.busy) return;
     this.busy = true;
     try {
       await this.enqueue(async () => {
         if (this.closed) return;
+        if (this.background?.refresh()) return;
         const state = await pulse(this.state.room.id, this.session);
         if (this.closed) return;
         this.lastPulse = Date.now();
@@ -145,6 +162,7 @@ export class RoomSession {
       return;
     }
     this.starting = true;
+    this.background?.refresh();
     let claimed: string | null = null;
     try {
       await this.enqueue(async () => {
@@ -190,11 +208,13 @@ export class RoomSession {
       throw e;
     } finally {
       this.starting = false;
+      this.background?.refresh();
     }
   }
   async stop() {
     const session = this.session;
     this.session = null;
+    this.background?.refresh();
     this.peers?.stopLocal();
     if (session)
       await this.enqueue(() => releaseStream(this.state.room.id, session));
@@ -203,6 +223,7 @@ export class RoomSession {
   }
   async close(voluntary = false) {
     this.closed = true;
+    this.background?.dispose();
     if (this.timer) clearInterval(this.timer);
     if (this.sampling) clearInterval(this.sampling);
     window.removeEventListener("online", this.onOnline);

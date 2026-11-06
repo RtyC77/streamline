@@ -24,7 +24,7 @@ export function RoomPage({
   initial: Snapshot;
   self: string;
   invite: string;
-  onLeave: () => void;
+  onLeave: (reason?: string) => void;
 }) {
   const [snapshot, setSnapshot] = useState(initial);
   const [media, setMedia] = useState(initialMedia);
@@ -51,6 +51,7 @@ export function RoomPage({
       metrics: setMetrics,
       error: report,
       connection: setConnection,
+      expired: onLeave,
     });
     session.current = controller;
     let cancelled = false;
@@ -74,7 +75,7 @@ export function RoomPage({
       window.removeEventListener("pageshow", show);
       void controller.close();
     };
-  }, [initial, self, report]);
+  }, [initial, self, report, onLeave]);
   const host = snapshot.members.find(
     (m) => m.user_id === snapshot.room.broadcaster_id,
   );

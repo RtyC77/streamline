@@ -62,6 +62,14 @@
 - [ ] Compare minimizar a aba com mantê-la visível. Registre efeitos de throttling/suspensão do navegador.
 - [ ] Teste congestionamento real e confirme que o encoder reduz o envio, sem exigir que mantenha 2,5 Mbps em uma rede incapaz.
 
+## Saída automática de espectadores
+
+- [ ] Deixe a aba de um espectador em segundo plano por dez minutos: deve voltar à entrada com aviso e encerrar a mídia e os heartbeats.
+- [ ] Retorne antes de dez minutos: deve continuar na sala, com uma contagem nova na próxima saída da aba.
+- [ ] Deixe a aba do transmissor em segundo plano por mais de dez minutos: a transmissão deve continuar.
+- [ ] Após a saída automática, clique em Entrar na sala para revalidar a associação pelo convite preservado.
+- [ ] Retome uma aba suspensa por mais de dez minutos: deve sair antes de renovar a participação.
+
 ## Registro de aceitação
 
 | Critério                                     | Evidência                           | Resultado |

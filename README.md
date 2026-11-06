@@ -168,7 +168,15 @@ public/                    Headers e redirects do Cloudflare
 .github/workflows/ci.yml    Verificações contínuas
 ```
 
-## 9. Limitações e próximas medições
+## 9. Saída automática de espectadores
+
+Espectadores saem automaticamente depois de 10 minutos contínuos com a aba em segundo plano ou a janela minimizada. Voltar antes do prazo zera a contagem. O transmissor permanece conectado enquanto compartilha o jogo; ao parar de transmitir, passa a seguir a regra dos espectadores.
+
+A saída fecha a mídia, os canais Realtime e os timers de heartbeat, solicita a remoção da associação e mostra um aviso na tela de entrada. O convite continua preenchido, mas é necessário clicar em **Entrar na sala** para voltar. Sem rede, a associação será liberada pela expiração já existente no servidor.
+
+Navegadores podem suspender timers em segundo plano. Por isso, o prazo também é conferido antes dos heartbeats e ao retomar a aba: não há garantia de executar exatamente no décimo minuto se o navegador suspender o JavaScript. O controle usa a visibilidade real da página, não apenas a perda de foco do teclado.
+
+## 10. Limitações e próximas medições
 
 A sinalização é endereçada ao destinatário no protocolo, mas Broadcast distribui o evento aos membros autorizados inscritos no tópico do remetente. SDP e candidatos ICE podem revelar informações de conectividade aos participantes da mesma sala; o usuário sem associação não tem acesso. WebRTC criptografa a mídia em trânsito. Não há moderação/expulsão nem proteção contra um amigo autorizado que use um cliente modificado para perturbar a própria sala.
 

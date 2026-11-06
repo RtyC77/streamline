@@ -8,8 +8,10 @@ import { explain } from "../services/errors";
 import type { Entry } from "../types";
 export function HomePage({
   onEnter,
+  message,
 }: {
   onEnter: (entry: Entry, self: string, invite: string) => void;
+  message?: string;
 }) {
   const [nickname, setNickname] = useState(
     () => localStorage.getItem("streamlite-nickname") ?? "",
@@ -171,6 +173,11 @@ export function HomePage({
             <div className="notice">
               Configure as variáveis do Supabase em <code>.env</code> para criar
               e acessar salas. As instruções estão no README.
+            </div>
+          )}
+          {message && (
+            <div className="notice" role="status">
+              {message}
             </div>
           )}
           {error && (

@@ -103,14 +103,16 @@ function capture() {
 }
 function setup() {
   const error = vi.fn();
+  const expired = vi.fn();
   const session = new RoomSession(initial, self, {
     snapshot: vi.fn(),
     media: vi.fn(),
     metrics: vi.fn(),
     error,
     connection: vi.fn(),
+    expired,
   });
-  return { session, error };
+  return { session, error, expired };
 }
 beforeEach(() => {
   vi.useFakeTimers();
@@ -130,6 +132,40 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("Ciclo da sala e respostas concorrentes", () => {
+  it("encerra peers, associação e heartbeats ao expirar em segundo plano", async () => {
+    const page = Object.assign(new EventTarget(), {
+      visibilityState: "hidden",
+    });
+    vi.stubGlobal("document", page);
+    const { session, expired } = setup();
+    await session.start();
+    await flush();
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    await flush();
+    expect(expired).toHaveBeenCalledOnce();
+    expect(mocks.disposed).toHaveBeenCalled();
+    expect(mocks.leave).toHaveBeenCalledWith(room);
+    const calls = mocks.pulse.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(mocks.pulse).toHaveBeenCalledTimes(calls);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("mantém transmissão ativa ao trocar para a janela do jogo", async () => {
+    const page = Object.assign(new EventTarget(), {
+      visibilityState: "visible",
+    });
+    vi.stubGlobal("document", page);
+    const { session, expired } = setup();
+    await session.start();
+    await flush();
+    await session.share(capture().info);
+    page.visibilityState = "hidden";
+    page.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(11 * 60_000);
+    expect(expired).not.toHaveBeenCalled();
+    expect(mocks.leave).not.toHaveBeenCalled();
+    await session.close();
+  });
   it("aguarda heartbeat em andamento antes de iniciar captura para não aplicar snapshot antigo depois", async () => {
     const { session } = setup();
     await session.start();

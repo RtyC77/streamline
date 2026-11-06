@@ -56,6 +56,10 @@ export function Settings({
           <dd>{connection}</dd>
         </div>
       </dl>
+      <p>
+        Espectadores saem automaticamente após 10 minutos com a aba em segundo
+        plano. Quem está transmitindo permanece conectado.
+      </p>
       <p className="muted">
         O navegador decide os parâmetros disponíveis. Confira os valores
         negociados no diagnóstico. A qualidade da mídia depende das métricas de
