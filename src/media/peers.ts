@@ -30,6 +30,7 @@ export class Peers {
   private queue: Promise<void> = Promise.resolve();
   private audio = "Sem trilha";
   private statisticsRunning = false;
+  private lastState: MediaState | null = null;
   constructor(
     private self: string,
     private clientId: string,
@@ -44,7 +45,7 @@ export class Peers {
     for (const p of this.peers.values()) p.pc.setConfiguration(config);
   }
   private emit() {
-    this.update({
+    const state: MediaState = {
       sharing: !!this.stream,
       remote: this.remote,
       audio: this.audio,
@@ -62,7 +63,19 @@ export class Peers {
           : this.stream
             ? "Transmitindo"
             : "Aguardando transmissão",
-    });
+    };
+    const old = this.lastState;
+    if (
+      old &&
+      old.sharing === state.sharing &&
+      old.remote === state.remote &&
+      old.audio === state.audio &&
+      old.connections === state.connections &&
+      old.status === state.status
+    )
+      return;
+    this.lastState = state;
+    this.update(state);
   }
   private close(id: string) {
     const p = this.peers.get(id);
@@ -111,7 +124,7 @@ export class Peers {
   private balanceTracks() {
     const enabled = this.peers.size > 0;
     this.stream?.getTracks().forEach((t) => {
-      t.enabled = enabled;
+      if (t.enabled !== enabled) t.enabled = enabled;
     });
   }
   private envelope(id: string, p: Peer, body: SignalBody): Signal {
@@ -315,8 +328,13 @@ export class Peers {
     this.balanceTracks();
     this.emit();
   }
-  async sample() {
-    if (this.statisticsRunning || this.disposed || this.peers.size === 0)
+  async sample(diagnostics = false) {
+    if (
+      (!this.stream && !diagnostics) ||
+      this.statisticsRunning ||
+      this.disposed ||
+      this.peers.size === 0
+    )
       return;
     this.statisticsRunning = true;
     try {
@@ -328,7 +346,7 @@ export class Peers {
               m.limitation === "bandwidth" || (m.rtt ?? 0) > 0.35;
             const next = congested
               ? Math.max(target.minBitrate, p.bitrate - 250_000)
-              : Math.min(target.maxBitrate, p.bitrate + 100_000);
+              : Math.min(target.bitrate, p.bitrate + 250_000);
             if (next !== p.bitrate) {
               p.bitrate = next;
               await Promise.all(
@@ -341,7 +359,7 @@ export class Peers {
           return m;
         }),
       );
-      if (!this.disposed) this.metrics(metrics);
+      if (!this.disposed && diagnostics) this.metrics(metrics);
     } catch {
       /* Stats may disappear as a peer closes. Never log SDP/ICE. */
     } finally {

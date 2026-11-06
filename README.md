@@ -4,6 +4,8 @@ Compartilhamento privado de jogos entre amigos, no navegador. React + TypeScript
 
 **Estado da entrega:** implementação local compilável, com testes automatizados. Para uso real é necessário configurar seu projeto Supabase e publicar em HTTPS. A transmissão e o áudio entre computadores diferentes ainda precisam da validação descrita em [docs/VALIDACAO.md](docs/VALIDACAO.md). Não há transmissão demonstrativa ou backend simulado na aplicação.
 
+A revisão de consumo, os resultados reproduzíveis e a migration adicional estão em [docs/DESEMPENHO.md](docs/DESEMPENHO.md).
+
 ## 1. Rodar pela primeira vez
 
 Somente quem desenvolve/publica precisa de Node.js 24 LTS, npm e, opcionalmente, Git. Seus amigos só precisam de Chrome ou Edge atualizado no Windows e do link do site.
@@ -31,6 +33,7 @@ Abra o endereço informado pelo Vite (normalmente `http://127.0.0.1:5173`). Sem 
 4. No **SQL Editor**, execute, nesta ordem, o conteúdo completo de:
    - `supabase/migrations/202611050001_rooms.sql`
    - `supabase/migrations/202611050002_turn.sql`
+   - `supabase/migrations/202611060003_reduce_room_churn.sql`
 5. Em **Realtime Settings**, **desative Allow public access**. Todos os canais da aplicação usam `private: true`. Não desative RLS. As migrations criam políticas em `realtime.messages`, onde o Supabase já mantém RLS habilitada.
 6. Em Auth, configure a Site URL de produção. Se usar CAPTCHA, habilite **Cloudflare Turnstile** na proteção contra abuso do Supabase, configure o segredo apenas no painel Auth, e a site key pública em `VITE_TURNSTILE_SITE_KEY`.
 7. No Turnstile, autorize o domínio de produção e o hostname local que você efetivamente usar. Não tente resolver desafios automaticamente.
@@ -67,10 +70,10 @@ Salas e convites expiram em 8 horas. Associações sem heartbeat por 60 segundos
 
 - Alvo: 1280 × 720, até 30 FPS. Constraints de captura são aplicadas quando suportadas e a escala de saída também é limitada no encoder. O navegador pode retornar outros valores; o diagnóstico informa os valores reais disponíveis.
 - Vídeo: preferência por H.264 usando codecs anunciados pelo navegador, preservando fallbacks; áudio: preferência por Opus. Não há alteração manual de SDP.
-- Bitrate inicial de vídeo de 3 Mbps **por espectador**, com teto adaptado entre 2,5 e 4 Mbps via `RTCRtpSender.setParameters()`. O controle nativo de congestionamento pode transmitir abaixo desse teto. RTT alto ou limitação de banda reduz o teto; condições estáveis o elevam gradualmente.
+- Bitrate inicial de vídeo de 3 Mbps **por espectador**, com teto adaptado entre 2,5 e 3 Mbps via `RTCRtpSender.setParameters()`. O controle nativo de congestionamento pode transmitir abaixo desse teto. RTT alto ou limitação de banda reduz o teto; condições estáveis o elevam gradualmente.
 - Uma captura é reutilizada por até quatro peers. Com quatro espectadores, planeje aproximadamente 12 Mbps de vídeo de upload no perfil inicial, além de áudio e overhead. A carga de codificação depende do navegador, driver e equipamento; não há garantia de compartilhamento de encoder nem de aceleração por hardware.
 - Sem espectadores, as trilhas são desativadas. Isso evita envio de mídia, mas não garante que todo custo da captura nativa desapareça. Parar a transmissão encerra as trilhas de fato.
-- Estatísticas são coletadas a cada 5 segundos somente se existem peers, também para o ajuste de bitrate. O painel é oculto por padrão. Não são estimados CPU, GPU ou RAM.
+- Estatísticas são coletadas a cada 10 segundos no transmissor com peers, ou a cada 5 segundos com diagnóstico aberto. Espectadores não coletam estatísticas enquanto o diagnóstico está fechado. O painel é oculto por padrão. Não são estimados CPU, GPU ou RAM.
 - A captura solicita `windowAudio: 'window'` e `systemAudio: 'exclude'`: áudio somente da janela ou aba escolhida, quando o navegador oferecer esse suporte. Trilhas de áudio retornadas para tela inteira ou superfície não identificada são encerradas e removidas antes de estabelecer WebRTC; o vídeo continua. Não há fallback para áudio global ou microfone.
 - Não existe uma API padronizada que confirme se o navegador respeitou `windowAudio` nem que identifique os aplicativos misturados em uma trilha de áudio. Se o seletor oferecer apenas **áudio do sistema**, deixe essa opção desmarcada. Nesse navegador, use vídeo sem áudio ou uma aba com áudio isolado. Atualize Chrome/Edge e valide com som de outro aplicativo antes de usar a transmissão. A aplicação não tenta separar uma mistura de áudio já fornecida pelo navegador.
 - A presença de uma trilha de áudio não prova que ela contém som audível. A interface informa trilha presente/ausente; confirme o som com o teste manual. Microfone nunca é solicitado.
@@ -181,7 +184,7 @@ Navegadores podem suspender timers em segundo plano. Por isso, o prazo também �
 
 A sinalização é endereçada ao destinatário no protocolo, mas Broadcast distribui o evento aos membros autorizados inscritos no tópico do remetente. SDP e candidatos ICE podem revelar informações de conectividade aos participantes da mesma sala; o usuário sem associação não tem acesso. WebRTC criptografa a mídia em trânsito. Não há moderação/expulsão nem proteção contra um amigo autorizado que use um cliente modificado para perturbar a própria sala.
 
-As mudanças de associação e de transmissão são reconciliadas por heartbeat a cada 10 segundos. Presence antecipa saídas, e o banco define a autoridade. Canais mudam de geração quando a associação muda para não perpetuar autorizações Realtime em cache. Uma saída/revogação não é instantânea em todos os clientes: considere até o próximo heartbeat; perda abrupta de processo usa os prazos de 35 segundos (concessão de transmissão) e 60 segundos (associação). Abas suspensas pelo navegador podem perder suas concessões e precisar entrar novamente. Consulte [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
+A reconciliação de segurança usa heartbeat a cada 20 segundos no transmissor e 30 segundos nos espectadores, com avisos Realtime antecipando alterações. Presence antecipa saídas, e o banco define a autoridade. Canais mudam de geração quando a associação muda para não perpetuar autorizações Realtime em cache. Uma saída/revogação não é instantânea em todos os clientes: considere até o próximo heartbeat; perda abrupta de processo usa os prazos de 35 segundos (concessão de transmissão) e 60 segundos (associação). Abas suspensas pelo navegador podem perder suas concessões e precisar entrar novamente. Consulte [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
 
 Antes de promover o MVP a validado: execute [docs/VALIDACAO.md](docs/VALIDACAO.md) em dois PCs e depois em cinco; teste rede móvel/CGNAT e TURN; meça o impacto no FPS do jogo, CPU/GPU pelo gerenciador do sistema e upload. Compare H.264 com o codec efetivamente negociado, sem presumir que uma preferência é mais eficiente naquele equipamento. Depois, avalie intervalos de heartbeat e políticas de bitrate baseados nessas medições. Não é necessário adicionar SFU ou uma infraestrutura permanente para esse grupo inicial.
 

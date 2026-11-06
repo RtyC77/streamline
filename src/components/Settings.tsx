@@ -41,7 +41,7 @@ export function Settings({
         </div>
         <div>
           <dt>Bitrate por espectador</dt>
-          <dd>Inicial 3 · ajuste 2,5–4 Mbps</dd>
+          <dd>Inicial 3 · ajuste 2,5–3 Mbps</dd>
         </div>
         <div>
           <dt>Codec preferido</dt>

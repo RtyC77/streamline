@@ -4,6 +4,7 @@ import type { MediaState, PeerMetric, Snapshot } from "../types";
 import { claimStream, leaveRoom, pulse, releaseStream, tabId } from "./rooms";
 import { Signaling } from "./signaling";
 import { iceConfiguration } from "./supabase";
+import { cadence, sameSnapshot } from "./performance";
 import {
   BackgroundTimeout,
   BACKGROUND_LEAVE_MESSAGE,
@@ -20,7 +21,11 @@ export class RoomSession {
   private signaling: Signaling | null = null;
   private peers: Peers | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
-  private sampling: ReturnType<typeof setInterval> | null = null;
+  private nextPulseAt = 0;
+  private lastStatsAt = 0;
+  private failures = 0;
+  private interrupted = false;
+  private applied = false;
   private busy = false;
   private closed = false;
   private connected = false;
@@ -90,7 +95,7 @@ export class RoomSession {
       },
       this.callbacks.error,
       () => {
-        void this.tick();
+        this.nextPulseAt = Math.min(this.nextPulseAt, Date.now() + 1000);
       },
     );
     await this.enqueue(async () => {
@@ -107,31 +112,49 @@ export class RoomSession {
       }
     });
     if (this.closed) return;
-    this.timer = setInterval(() => void this.tick(), 10_000);
-    this.sampling = setInterval(() => {
-      if (Date.now() - this.lastPulse > 25_000) {
+    this.nextPulseAt = Date.now() + cadence.viewerPulse;
+    this.timer = setInterval(() => {
+      if (this.background?.refresh()) return;
+      const now = Date.now();
+      if (now >= this.nextPulseAt) void this.tick();
+      if (
+        !this.interrupted &&
+        now - this.lastPulse > (this.session ? 30_000 : 55_000)
+      ) {
+        this.interrupted = true;
         this.peers?.stopLocal();
         this.session = null;
         this.callbacks.connection("Conexão interrompida");
       }
-      void this.peers?.sample();
-    }, 5000);
+      if (this.connected)
+        void this.peers?.maintain().catch(this.callbacks.error);
+      if (
+        now - this.lastStatsAt >=
+        (this.diagnostics ? cadence.diagnostics : cadence.adaptation)
+      ) {
+        this.lastStatsAt = now;
+        void this.peers?.sample(this.diagnostics);
+      }
+    }, cadence.maintenance);
     window.addEventListener("online", this.onOnline);
   }
   private onOnline = () => {
-    void this.tick();
+    void this.tick(true);
   };
   private async apply(state: Snapshot) {
     if (this.closed) return;
+    if (this.applied && sameSnapshot(this.state, state)) return;
+    this.applied = true;
     this.state = state;
     this.callbacks.snapshot(state);
     this.peers?.setSnapshot(state);
     await this.signaling?.sync(state.members, state.room.channel_epoch);
     if (this.connected) await this.peers?.maintain();
   }
-  private async tick() {
+  private async tick(force = false) {
     if (this.background?.refresh()) return;
     if (this.closed || this.busy) return;
+    if (!force && Date.now() - this.lastPulse < 1000) return;
     this.busy = true;
     try {
       await this.enqueue(async () => {
@@ -140,6 +163,8 @@ export class RoomSession {
         const state = await pulse(this.state.room.id, this.session);
         if (this.closed) return;
         this.lastPulse = Date.now();
+        this.failures = 0;
+        this.interrupted = false;
         await this.apply(state);
         if (
           import.meta.env.VITE_TURN_FUNCTION &&
@@ -156,7 +181,15 @@ export class RoomSession {
       if (this.closed) return;
       this.callbacks.connection("Reconectando");
       this.callbacks.error(e);
+      this.failures++;
     } finally {
+      this.nextPulseAt =
+        Date.now() +
+        (this.failures
+          ? Math.min(30_000, 5_000 * 2 ** Math.min(this.failures - 1, 3))
+          : this.session
+            ? cadence.senderPulse
+            : cadence.viewerPulse);
       this.busy = false;
     }
   }
@@ -183,7 +216,10 @@ export class RoomSession {
             "A captura foi encerrada. Tente compartilhar novamente.",
           );
         this.session = claimed;
+        this.nextPulseAt = Date.now() + cadence.senderPulse;
         const state = await pulse(this.state.room.id, claimed);
+        this.lastPulse = Date.now();
+        this.interrupted = false;
         await this.apply(state);
         if (
           this.closed ||
@@ -223,13 +259,12 @@ export class RoomSession {
     if (session)
       await this.enqueue(() => releaseStream(this.state.room.id, session));
     void this.signaling?.notifyChange().catch(this.callbacks.error);
-    if (!this.closed) await this.tick();
+    if (!this.closed) await this.tick(true);
   }
   async close(voluntary = false) {
     this.closed = true;
     this.background?.dispose();
     if (this.timer) clearInterval(this.timer);
-    if (this.sampling) clearInterval(this.sampling);
     window.removeEventListener("online", this.onOnline);
     this.peers?.dispose();
     await this.signaling?.close();

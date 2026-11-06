@@ -1,5 +1,7 @@
 # Arquitetura e decisões
 
+> Revisão de consumo: os intervalos e otimizações atuais estão em [DESEMPENHO.md](DESEMPENHO.md). Os prazos descritos abaixo registram o desenho inicial.
+
 ## Fluxo de confiança
 
 ```mermaid

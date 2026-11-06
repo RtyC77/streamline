@@ -121,6 +121,23 @@ beforeEach(() => {
   vi.stubGlobal("RTCRtpReceiver", { getCapabilities: () => null });
 });
 describe("Negociação por espectador", () => {
+  it("não coleta getStats do espectador com diagnóstico fechado", async () => {
+    const v = setup(viewer, vc);
+    await v.manager.maintain();
+    const stats = vi.spyOn(FakePC.all[0], "getStats");
+    await v.manager.sample(false);
+    expect(stats).not.toHaveBeenCalled();
+    await v.manager.sample(true);
+    expect(stats).toHaveBeenCalledOnce();
+    v.manager.dispose();
+  });
+  it("não reemite o mesmo estado de mídia para snapshots equivalentes", () => {
+    const v = setup(viewer, vc);
+    const count = v.states.length;
+    v.manager.setSnapshot({ ...snapshot, members: [...snapshot.members] });
+    expect(v.states).toHaveLength(count);
+    v.manager.dispose();
+  });
   it("negocia offer/answer, enfileira ICE precoce e ignora mensagens antigas", async () => {
     const h = setup(host, hc),
       v = setup(viewer, vc);

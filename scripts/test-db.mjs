@@ -15,6 +15,8 @@ await db.exec(`create role anon; create role authenticated; create schema auth; 
  create table auth.users(id uuid primary key); grant usage on schema auth,realtime to authenticated;
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  create function realtime.topic() returns text language sql stable as $$ select current_setting('realtime.topic',true) $$;
+ create table realtime.test_events(payload jsonb,event text,topic text,private boolean);
+ create function realtime.send(payload jsonb,event text,topic text,private boolean) returns void language sql as $$ insert into realtime.test_events values(payload,event,topic,private) $$;
  create table realtime.messages(extension text); alter table realtime.messages enable row level security; grant select,insert on realtime.messages to authenticated;`);
 for (const id of ids) await db.query("insert into auth.users values($1)", [id]);
 await db.exec(
@@ -26,6 +28,15 @@ await db.exec(
 await db.exec(
   await readFile(
     new URL("../supabase/migrations/202611050002_turn.sql", import.meta.url),
+    "utf8",
+  ),
+);
+await db.exec(
+  await readFile(
+    new URL(
+      "../supabase/migrations/202611060003_reduce_room_churn.sql",
+      import.meta.url,
+    ),
     "utf8",
   ),
 );
@@ -99,7 +110,38 @@ try {
     await as(i);
     const result = await rpc("join_room", [token, `Amigo ${i}`, tabs[i]]);
     ok(!result.error, `participante ${i + 1} autorizado`);
+    ok(
+      result.room.channel_epoch === entry.room.channel_epoch,
+      "entrada preserva geração e evita reassinar os canais",
+    );
   }
+  const events = (await admin("select * from realtime.test_events")).rows;
+  ok(
+    events.length === 4 &&
+      events.every(
+        (e) => e.private === true && Object.keys(e.payload).length === 0,
+      ),
+    "entrada envia um único aviso privado sem dados pessoais",
+  );
+  await admin(
+    "update public.room_members set last_seen=now()-interval '61 seconds' where room_id=$1 and user_id=$2",
+    [room, ids[4]],
+  );
+  await as(0);
+  ok(
+    !!(await rpc("join_room", [token, "Outra aba", randomUUID()])).error,
+    "entrada de outra aba continua recusada após limpeza",
+  );
+  ok(
+    (await rpc("room_pulse", [room, tabs[0], null])).room.channel_epoch !==
+      entry.room.channel_epoch,
+    "limpeza revoga geração mesmo quando a entrada é recusada",
+  );
+  await as(4);
+  ok(
+    !(await rpc("join_room", [token, "Amigo 4", tabs[4]])).error,
+    "participante pode revalidar convite após limpeza",
+  );
   await as(5);
   ok(
     !!(await rpc("join_room", [token, "Excedente", tabs[5]])).error,

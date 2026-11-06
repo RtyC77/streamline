@@ -1,29 +1,46 @@
-import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { configured, parseIce } from "../config";
-export const supabase = configured
-  ? createClient(
-      import.meta.env.VITE_SUPABASE_URL,
-      import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      {
-        global: {
-          fetch: (input, options) =>
-            fetch(input, {
-              ...options,
-              signal: options?.signal
-                ? AbortSignal.any([options.signal, AbortSignal.timeout(15_000)])
-                : AbortSignal.timeout(15_000),
-            }),
+let supabase: SupabaseClient | null = null;
+let loading: Promise<SupabaseClient> | null = null;
+export async function prepareClient(): Promise<SupabaseClient> {
+  if (!configured)
+    throw new Error("Configure o Supabase no arquivo .env para conectar.");
+  if (supabase) return supabase;
+  loading ??= import("@supabase/supabase-js")
+    .then(({ createClient }) => {
+      supabase = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        {
+          global: {
+            fetch: (input, options) =>
+              fetch(input, {
+                ...options,
+                signal: options?.signal
+                  ? AbortSignal.any([
+                      options.signal,
+                      AbortSignal.timeout(15_000),
+                    ])
+                  : AbortSignal.timeout(15_000),
+              }),
+          },
         },
-      },
-    )
-  : null;
+      );
+      return supabase;
+    })
+    .catch((error) => {
+      loading = null;
+      throw error;
+    });
+  return loading;
+}
 export function client() {
   if (!supabase)
     throw new Error("Configure o Supabase no arquivo .env para conectar.");
   return supabase;
 }
 export async function authenticate(captchaToken?: string) {
-  const api = client();
+  const api = await prepareClient();
   const { data: session, error: sessionError } = await api.auth.getSession();
   if (sessionError) throw sessionError;
   if (session.session) return session.session.user.id;

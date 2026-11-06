@@ -104,15 +104,16 @@ function capture() {
 function setup() {
   const error = vi.fn();
   const expired = vi.fn();
+  const snapshot = vi.fn();
   const session = new RoomSession(initial, self, {
-    snapshot: vi.fn(),
+    snapshot,
     media: vi.fn(),
     metrics: vi.fn(),
     error,
     connection: vi.fn(),
     expired,
   });
-  return { session, error, expired };
+  return { session, error, expired, snapshot };
 }
 beforeEach(() => {
   vi.useFakeTimers();
@@ -132,6 +133,37 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("Ciclo da sala e respostas concorrentes", () => {
+  it("usa no máximo 121 pulses por hora em espera e não reenvia snapshots iguais ao React", async () => {
+    const { session, snapshot } = setup();
+    await session.start();
+    await flush();
+    expect(mocks.pulse).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(60 * 60_000);
+    expect(mocks.pulse.mock.calls.length).toBeLessThanOrEqual(121);
+    expect(snapshot).toHaveBeenCalledOnce();
+    await session.close();
+  });
+  it("renova a transmissão a cada vinte segundos, dentro da concessão de 35 segundos", async () => {
+    const { session } = setup();
+    await session.start();
+    await flush();
+    await session.share(capture().info);
+    mocks.pulse.mockClear();
+    await vi.advanceTimersByTimeAsync(60 * 60_000);
+    expect(mocks.pulse.mock.calls.length).toBe(180);
+    expect(mocks.stopLocal).not.toHaveBeenCalled();
+    await session.close();
+  });
+  it("reduz tentativas e não sobrepõe chamadas quando o backend falha", async () => {
+    const { session } = setup();
+    await session.start();
+    await flush();
+    mocks.pulse.mockRejectedValue(new Error("offline"));
+    mocks.pulse.mockClear();
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect(mocks.pulse.mock.calls.length).toBeLessThanOrEqual(7);
+    await session.close();
+  });
   it("conclui a saída anterior antes de permitir uma nova entrada", async () => {
     const page = Object.assign(new EventTarget(), {
       visibilityState: "hidden",
@@ -189,7 +221,7 @@ describe("Ciclo da sala e respostas concorrentes", () => {
     await flush();
     const pending = deferred<Snapshot>();
     mocks.pulse.mockReturnValueOnce(pending.promise);
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(30_000);
     const c = capture();
     const sharing = session.share(c.info);
     await flush();

@@ -64,6 +64,7 @@ export class Signaling {
       if (!members.some((m) => m.user_id === id)) {
         this.channels.delete(id);
         this.ready.delete(id);
+        this.counts.delete(id);
         await client().removeChannel(channel);
       }
     for (const member of members) {
@@ -82,12 +83,7 @@ export class Signaling {
       this.channels.set(id, channel);
       let seenOnline = false;
       channel.on("broadcast", { event: "state-changed" }, () => {
-        if (
-          this.closed ||
-          this.channels.get(id) !== channel ||
-          id === this.self
-        )
-          return;
+        if (this.closed || this.channels.get(id) !== channel) return;
         if (Date.now() - this.lastRefresh < 1000) return;
         this.lastRefresh = Date.now();
         this.changed();
@@ -169,6 +165,14 @@ export class Signaling {
     const channels = [...this.channels.values()];
     this.channels.clear();
     this.ready.clear();
+    this.counts.clear();
     await Promise.all(channels.map((c) => client().removeChannel(c)));
+    const remaining = client().getChannels();
+    if (
+      remaining.length > 0 &&
+      remaining.every((channel) => channels.includes(channel))
+    ) {
+      await client().removeAllChannels();
+    } else if (remaining.length === 0) await client().realtime.disconnect();
   }
 }

@@ -1,6 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, lazy, Suspense } from "react";
 import { HomePage } from "./pages/HomePage";
-import { RoomPage } from "./pages/RoomPage";
+const RoomPage = lazy(() =>
+  import("./pages/RoomPage").then((module) => ({ default: module.RoomPage })),
+);
 import type { Entry } from "./types";
 export function App() {
   const [message, setMessage] = useState("");
@@ -15,12 +17,14 @@ export function App() {
     if (!reason) history.replaceState(null, "", "/");
   }, []);
   return room ? (
-    <RoomPage
-      initial={room.entry}
-      self={room.self}
-      invite={room.invite}
-      onLeave={leave}
-    />
+    <Suspense fallback={<p role="status">Abrindo sala…</p>}>
+      <RoomPage
+        initial={room.entry}
+        self={room.self}
+        invite={room.invite}
+        onLeave={leave}
+      />
+    </Suspense>
   ) : (
     <HomePage
       message={message}
