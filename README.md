@@ -72,7 +72,7 @@ Salas e convites expiram em 8 horas. Associações sem heartbeat por 60 segundos
 - Alvo: 1280 × 720, até 30 FPS. Constraints de captura são aplicadas quando suportadas e a escala de saída também é limitada no encoder. O navegador pode retornar outros valores; o diagnóstico informa os valores reais disponíveis.
 - Vídeo: preferência por H.264 usando codecs anunciados pelo navegador, preservando fallbacks; áudio: preferência por Opus. Não há alteração manual de SDP.
 - Bitrate inicial de vídeo de 3 Mbps **por espectador**, com teto adaptado entre 2,5 e 3 Mbps via `RTCRtpSender.setParameters()`. O controle nativo de congestionamento pode transmitir abaixo desse teto. RTT alto ou limitação de banda reduz o teto; condições estáveis o elevam gradualmente.
-- Uma captura é reutilizada por até quatro peers. Com quatro espectadores, planeje aproximadamente 12 Mbps de vídeo de upload no perfil inicial, além de áudio e overhead. A carga de codificação depende do navegador, driver e equipamento; não há garantia de compartilhamento de encoder nem de aceleração por hardware.
+- Uma captura é reutilizada por até sete peers. Com sete espectadores, planeje aproximadamente 21 Mbps de vídeo de upload no perfil inicial, além de áudio e overhead. A carga de codificação depende do navegador, driver e equipamento; não há garantia de compartilhamento de encoder nem de aceleração por hardware.
 - Sem espectadores, as trilhas são desativadas. Isso evita envio de mídia, mas não garante que todo custo da captura nativa desapareça. Parar a transmissão encerra as trilhas de fato.
 - Estatísticas são coletadas a cada 10 segundos no transmissor com peers, ou a cada 5 segundos com diagnóstico aberto. Espectadores não coletam estatísticas enquanto o diagnóstico está fechado. O painel é oculto por padrão. Não são estimados CPU, GPU ou RAM.
 - A captura solicita `windowAudio: 'window'` e `systemAudio: 'exclude'`: áudio somente da janela ou aba escolhida, quando o navegador oferecer esse suporte. Trilhas de áudio retornadas para tela inteira ou superfície não identificada são encerradas e removidas antes de estabelecer WebRTC; o vídeo continua. Não há fallback para áudio global ou microfone.
@@ -132,7 +132,7 @@ npm audit
 npm run preview
 ```
 
-Os testes Vitest usam peers e streams simulados para verificar protocolo, concorrência lógica, ICE precoce, sessões antigas, até quatro espectadores, liberação de recursos e emissão autenticada de TURN. Os testes SQL executam as migrations em PostgreSQL WASM (PGlite), com papéis `authenticated`/`anon`, RLS real e stubs **apenas** do contrato `auth.uid()`/tópico do Realtime. Não substituem Supabase Realtime gerenciado, rede real, captura ou encoder.
+Os testes Vitest usam peers e streams simulados para verificar protocolo, concorrência lógica, ICE precoce, sessões antigas, até sete espectadores, liberação de recursos e emissão autenticada de TURN. Os testes SQL executam as migrations em PostgreSQL WASM (PGlite), com papéis `authenticated`/`anon`, RLS real e stubs **apenas** do contrato `auth.uid()`/tópico do Realtime. Não substituem Supabase Realtime gerenciado, rede real, captura ou encoder.
 
 Para validar Auth/RLS/Broadcast no Supabase real, use um projeto **de testes** com as migrations aplicadas, Auth anônimo e sem CAPTCHA:
 
@@ -187,9 +187,11 @@ A sinalização é endereçada ao destinatário no protocolo, mas Broadcast dist
 
 A reconciliação de segurança usa heartbeat a cada 20 segundos no transmissor e 30 segundos nos espectadores, com avisos Realtime antecipando alterações. Presence antecipa saídas, e o banco define a autoridade. Canais mudam de geração quando a associação muda para não perpetuar autorizações Realtime em cache. Uma saída/revogação não é instantânea em todos os clientes: considere até o próximo heartbeat; perda abrupta de processo usa os prazos de 35 segundos (concessão de transmissão) e 60 segundos (associação). Abas suspensas pelo navegador podem perder suas concessões e precisar entrar novamente. Consulte [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
 
-Antes de promover o MVP a validado: execute [docs/VALIDACAO.md](docs/VALIDACAO.md) em dois PCs e depois em cinco; teste rede móvel/CGNAT e TURN; meça o impacto no FPS do jogo, CPU/GPU pelo gerenciador do sistema e upload. Compare H.264 com o codec efetivamente negociado, sem presumir que uma preferência é mais eficiente naquele equipamento. Depois, avalie intervalos de heartbeat e políticas de bitrate baseados nessas medições. Não é necessário adicionar SFU ou uma infraestrutura permanente para esse grupo inicial.
+Antes de promover o MVP a validado: execute [docs/VALIDACAO.md](docs/VALIDACAO.md) em dois PCs e depois em oito; teste rede móvel/CGNAT e TURN; meça o impacto no FPS do jogo, CPU/GPU pelo gerenciador do sistema e upload. Compare H.264 com o codec efetivamente negociado, sem presumir que uma preferência é mais eficiente naquele equipamento. Depois, avalie intervalos de heartbeat e políticas de bitrate baseados nessas medições. Não é necessário adicionar SFU ou uma infraestrutura permanente para esse grupo inicial.
 
 ## 11. Administração de salas
+
+Na criação, um slider permite escolher de **2 a 8 pessoas**, incluindo o criador, com padrão de duas e estimativas de impacto/upload. Aplique a migration `202611060007_room_capacity.sql` depois das anteriores. Salas existentes mantêm cinco vagas. Consulte [docs/CAPACIDADE.md](docs/CAPACIDADE.md) para configuração, estimativas e testes com oito participantes.
 
 Novas salas recebem automaticamente o nome `Sala de <apelido do criador>`. Aplique também a migration `202611060006_room_creator_name.sql` no SQL Editor depois das anteriores. O nome é salvo na criação e aparece tanto para os participantes quanto na administração; salas existentes mantêm seus nomes.
 

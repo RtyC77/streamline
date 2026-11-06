@@ -149,13 +149,13 @@ describe("Ciclo da sala e respostas concorrentes", () => {
     expect(mocks.leave).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });
-  it("usa no máximo 121 pulses por hora em espera e não reenvia snapshots iguais ao React", async () => {
+  it("reutiliza a entrada autorizada e usa no máximo 120 pulses por hora em espera", async () => {
     const { session, snapshot } = setup();
     await session.start();
     await flush();
-    expect(mocks.pulse).toHaveBeenCalledOnce();
+    expect(mocks.pulse).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(60 * 60_000);
-    expect(mocks.pulse.mock.calls.length).toBeLessThanOrEqual(121);
+    expect(mocks.pulse.mock.calls.length).toBeLessThanOrEqual(120);
     expect(snapshot).toHaveBeenCalledOnce();
     await session.close();
   });

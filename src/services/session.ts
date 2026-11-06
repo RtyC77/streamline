@@ -102,8 +102,13 @@ export class RoomSession {
     await this.enqueue(async () => {
       if (this.closed) return;
       try {
-        const state = await pulse(this.state.room.id, this.session);
-        this.lastPulse = Date.now();
+        // Admission already returned an authorized snapshot and renewed membership.
+        // Revalidate only if setup (for example TURN) took long enough to stale it.
+        let state = this.state;
+        if (Date.now() - this.lastPulse >= 10_000) {
+          state = await pulse(this.state.room.id, this.session);
+          this.lastPulse = Date.now();
+        }
         await this.apply(state);
       } catch (error) {
         if (this.closed) return;

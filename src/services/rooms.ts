@@ -37,11 +37,13 @@ export async function rpc<T>(
     throw new Error(String(data.error));
   return data as T;
 }
-export function enter(nickname: string, invite?: string) {
+export function enter(nickname: string, invite?: string, capacity = 2) {
+  if (!invite && (!Number.isInteger(capacity) || capacity < 2 || capacity > 8))
+    throw new Error('Escolha um limite de 2 a 8 pessoas.');
   return rpc<Entry>(invite ? "join_room" : "create_room", {
     p_nickname: nickname.trim(),
     p_client: tabId(),
-    ...(invite ? { p_invite: parseInvite(invite) } : {}),
+    ...(invite ? { p_invite: parseInvite(invite) } : {p_max_members: capacity}),
   });
 }
 export const pulse = (room: string, session: string | null = null) =>

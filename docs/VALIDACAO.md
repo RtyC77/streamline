@@ -38,7 +38,7 @@
 
 ## Grupo e concorrência
 
-- [ ] Entre com até cinco identidades em computadores/perfis independentes; verifique quatro espectadores simultâneos.
+- [ ] Escolha 2 vagas e confira a recusa da terceira pessoa; depois escolha 8, entre com oito identidades em computadores/perfis independentes e verifique sete espectadores simultâneos. Tente uma nona entrada e entradas simultâneas na última vaga.
 - [ ] Entre depois de a transmissão começar; confirme recepção sem reiniciar a captura do transmissor.
 - [ ] Uma sexta identidade recebe mensagem de sala cheia.
 - [ ] Clique em compartilhar simultaneamente em dois PCs. Apenas um recebe concessão; o outro encerra as trilhas da tentativa recusada.
@@ -64,7 +64,7 @@
 - [ ] Para comprovar TURN, em uma publicação de teste configure `VITE_ICE_TRANSPORT_POLICY=relay` com TURN válido e gere novo build. Confirme mídia e `Relay (TURN)` no diagnóstico. Restaure `all` depois.
 - [ ] TURN indisponível retorna erro compreensível; não alegar suporte a todos os NATs apenas com STUN.
 - [ ] Teste sessão de mais de uma hora para conferir renovação das credenciais TURN.
-- [ ] Compare FPS do jogo, CPU/GPU/RAM pelo gerenciador do sistema e upload com zero, um e quatro espectadores.
+- [ ] Compare FPS do jogo, CPU/GPU/RAM pelo gerenciador do sistema e upload com zero, um e sete espectadores.
 - [ ] Faça teste de pelo menos 30 minutos e ciclos repetidos de compartilhar/parar. Observe se tracks, peers e consumo se acumulam.
 - [ ] Compare minimizar a aba com mantê-la visível. Registre efeitos de throttling/suspensão do navegador.
 - [ ] Teste congestionamento real e confirme que o encoder reduz o envio, sem exigir que mantenha 2,5 Mbps em uma rede incapaz.
@@ -86,7 +86,7 @@
 | Áudio oferecido/ausente tratado corretamente | Teste audível e aviso               | Pendente  |
 | 720p30 quando suportado                      | getStats real                       | Pendente  |
 | Saída/reconexão sem estado corrompido        | Cenários acima                      | Pendente  |
-| Um transmissor e quatro espectadores         | Cinco identidades reais             | Pendente  |
+| Um transmissor e sete espectadores         | Oito identidades reais             | Pendente  |
 | Auth/RLS/Realtime no serviço                 | Integração e verificações negativas | Pendente  |
 | HTTPS e headers no Cloudflare                | URL e headers                       | Pendente  |
 

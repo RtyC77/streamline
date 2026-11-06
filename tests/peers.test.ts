@@ -93,8 +93,8 @@ const snapshot: Snapshot = {
     { user_id: viewer, nickname: "Viewer", client_id: vc },
   ],
 };
-const flush = async () => {
-  for (let i = 0; i < 30; i++) await Promise.resolve();
+const flush = async (rounds = 30) => {
+  for (let i = 0; i < rounds; i++) await Promise.resolve();
 };
 function setup(self: string, client: string) {
   const messages: Signal[] = [];
@@ -237,9 +237,9 @@ describe("Negociação por espectador", () => {
     expect(h.states.at(-1)?.sharing).toBe(false);
     h.manager.dispose();
   });
-  it("suporta quatro espectadores sem duplicar a captura", async () => {
+  it("suporta sete espectadores sem duplicar a captura", async () => {
     const h = setup(host, hc);
-    const others = Array.from({ length: 4 }, () => ({
+    const others = Array.from({ length: 7 }, () => ({
       user_id: crypto.randomUUID(),
       nickname: "Amigo",
       client_id: crypto.randomUUID(),
@@ -261,7 +261,9 @@ describe("Negociação por espectador", () => {
         connection: crypto.randomUUID(),
       });
     await flush();
-    expect(FakePC.all).toHaveLength(4);
+    // Seven offers pass through the serialized negotiation queue.
+    await flush(100);
+    expect(FakePC.all).toHaveLength(7);
     expect(FakePC.all.every((p) => p.added[0] === track)).toBe(true);
     h.manager.departed(others[0].user_id);
     expect(FakePC.all[0].closed).toBe(true);

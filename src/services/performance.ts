@@ -11,6 +11,7 @@ export function sameSnapshot(a: Snapshot, b: Snapshot) {
     a.room.id === b.room.id &&
     a.room.created_by === b.room.created_by &&
     a.room.name === b.room.name &&
+    a.room.max_members === b.room.max_members &&
     a.room.expires_at === b.room.expires_at &&
     a.room.channel_epoch === b.room.channel_epoch &&
     a.room.broadcaster_id === b.room.broadcaster_id &&

@@ -101,6 +101,8 @@ export class Signaling {
           }
           this.counts.set(id, count);
           if (++count.count > 300) return;
+          // Broadcast reaches all subscribers: skip SDP/ICE validation for other destinations.
+          if (!payload || typeof payload !== 'object' || !('to' in payload) || payload.to !== this.self) return;
           const signal = parseSignal(payload);
           if (signal && signal.to === this.self && id !== this.self)
             this.receive(id, signal);
@@ -112,7 +114,7 @@ export class Signaling {
         const online = Object.values(channel.presenceState()).some(
           (values) => values.length > 0,
         );
-        if (online || seenOnline) this.presence(id, online);
+        if (online !== seenOnline) this.presence(id, online);
         seenOnline = online;
       });
       channel.subscribe((state) => {

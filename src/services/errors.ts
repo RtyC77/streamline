@@ -1,4 +1,6 @@
 export function explain(error: unknown): string {
+  if (error && typeof error === 'object' && 'code' in error && error.code === 'PGRST202')
+    return 'Atualize as migrations no Supabase, incluindo 202611060007_room_capacity.sql, para criar salas com limite configurável.';
   const message =
     error instanceof Error
       ? error.message

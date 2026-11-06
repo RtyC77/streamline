@@ -56,3 +56,7 @@ Compare o painel Usage/Realtime antes e depois com o mesmo número de usuários 
 - [Broadcast do banco para avisos de mudança](https://supabase.com/docs/guides/realtime/subscribing-to-database-changes)
 - [Contabilização de mensagens e fan-out](https://supabase.com/docs/guides/platform/manage-your-usage/realtime-messages)
 - [Parâmetros do encoder WebRTC](https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpSender/setParameters)
+
+## Salas configuráveis e cache
+
+A revisão com salas de 2 a 8 pessoas está descrita em [CAPACIDADE.md](CAPACIDADE.md). Inclui reutilização do snapshot de admissão (uma RPC a menos na inicialização rápida), descarte antecipado de eventos de outro destinatário, deduplicação dos callbacks Presence e cache de assets com hash. As cadências permanecem 20/30 segundos. Não foram medidos percentuais novos de economia de CPU ou fatura.

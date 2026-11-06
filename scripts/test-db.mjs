@@ -9,7 +9,7 @@ const ok = (value, message) => {
   checks++;
   console.log(`  OK ${message}`);
 };
-const ids = Array.from({ length: 8 }, () => randomUUID()),
+const ids = Array.from({ length: 10 }, () => randomUUID()),
   tabs = ids.map(() => randomUUID());
 await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth; create schema realtime;
  create table auth.users(id uuid primary key); grant usage on schema auth,realtime to authenticated;
@@ -51,6 +51,7 @@ await db.exec(
 );
 await db.exec(await readFile(new URL('../supabase/migrations/202611060005_admin.sql',import.meta.url),'utf8'));
 await db.exec(await readFile(new URL('../supabase/migrations/202611060006_room_creator_name.sql',import.meta.url),'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/202611060007_room_capacity.sql',import.meta.url),'utf8'));
 async function as(i) {
   await db.exec("reset role");
   await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
@@ -87,6 +88,7 @@ try {
   ok(/^[a-f0-9]{64}$/.test(token), "convite imprevisível gerado");
   ok(entry.members.length === 1, "criador associado à sala");
   ok(entry.room.name === 'Sala de Anfitrião', 'sala recebe o apelido do criador');
+  ok(entry.room.max_members === 5, 'cliente anterior continua criando sala de cinco');
   ok(
     (await db.query("select * from public.rooms")).rows.length === 1,
     "membro autorizado lê sala",
@@ -411,6 +413,21 @@ try {
   await as(0);await denied(()=>rpc('room_pulse',[first.room.id,tabs[0],null]),'sala finalizada não renova participação');
   ok(!!(await rpc('join_room',[first.invite,'Teste',tabs[0]])).error,'convite da sala finalizada é invalidado');
   ok(!(await rpc('create_room',['Vaga liberada',tabs[0]])).error,'sala finalizada libera cota de criação');
+  await admin('delete from private.attempts');
+  await as(8);
+  for (const capacity of [null,1,9]) ok(!!(await rpc('create_room',['Limite inválido',tabs[8],capacity])).error,'servidor recusa capacidade fora de 2 a 8');
+  const small=await rpc('create_room',['Dupla',tabs[8],2]);
+  ok(small.room.max_members===2,'capacidade de duas pessoas consta no snapshot');
+  await as(9);ok(!(await rpc('join_room',[small.invite,'Amigo',tabs[9]])).error,'segunda pessoa entra em sala de duas');
+  await as(0);ok((await rpc('join_room',[small.invite,'Excedente',tabs[0]])).error.includes('2 participantes'),'terceira pessoa recusada pelo limite específico');
+  await as(8);const large=await rpc('create_room',['Grupo',tabs[8],8]);
+  for(let i=0;i<7;i++){await as(i);ok(!(await rpc('join_room',[large.invite,`Pessoa ${i}`,tabs[i]])).error,'sala de oito aceita espectador autorizado');}
+  await as(8);const full=await rpc('room_pulse',[large.room.id,tabs[8],null]);
+  ok(full.members.length===8&&full.room.max_members===8,'sala cheia suporta criador e sete espectadores');
+  await as(9);ok((await rpc('join_room',[large.invite,'Nona pessoa',tabs[9]])).error.includes('8 participantes'),'nona pessoa recusada');
+  await denied(()=>db.query('update public.rooms set max_members=8 where id=$1',[small.room.id]),'participante não altera limite diretamente');
+  await admin('reset role');await denied(()=>db.query('update public.rooms set max_members=9 where id=$1',[large.room.id]),'constraint impede capacidade acima de oito');
+  await db.exec('set role anon');await denied(()=>rpc('create_room',['Intruso',tabs[9],8]),'anônimo sem autenticação não cria sala pela nova RPC');
   console.log(
     `\n${checks} verificações SQL passaram em PostgreSQL WASM (PGlite). Realtime gerenciado exige teste separado.`,
   );

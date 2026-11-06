@@ -28,6 +28,7 @@ export function RoomPage({
   onLeave: (reason?: string) => void;
 }) {
   const [snapshot, setSnapshot] = useState(initial);
+  const capacity = snapshot.room.max_members ?? 5;
   const [media, setMedia] = useState(initialMedia);
   const [metrics, setMetrics] = useState<PeerMetric[]>([]);
   const [connection, setConnection] = useState("Conectando");
@@ -169,7 +170,7 @@ export function RoomPage({
             <span className="section-label">PARTICIPANTES</span>
             <span>
               {snapshot.members.length}
-              <span className="muted"> / 5</span>
+              <span className="muted"> / {capacity}</span>
             </span>
           </div>
           <ul>
@@ -210,9 +211,9 @@ export function RoomPage({
               </li>
             ))}
           </ul>
-          {snapshot.members.length < 5 && (
+          {snapshot.members.length < capacity && (
             <div className="empty-seat">
-              <span>+</span>Tem lugar para mais {5 - snapshot.members.length}
+              <span>+</span>Tem lugar para mais {capacity - snapshot.members.length}
             </div>
           )}
         </div>

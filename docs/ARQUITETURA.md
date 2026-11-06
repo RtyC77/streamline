@@ -74,4 +74,4 @@ Captura nativa sem canvas, filtros, gravação ou análise de frames. Preferênc
 
 `getStats()` é coletado por peer sem imprimir SDP, ICE, endereços ou tokens. Bitrate é a diferença de bytes por tempo; a primeira amostra não tem bitrate. A rota vem do par selecionado e dos tipos dos candidatos. Métricas ausentes aparecem como indisponíveis. RTT e motivo `bandwidth` do encoder orientam o teto; perdas cumulativas são exibidas, sem serem tratadas erroneamente como uma taxa de perda.
 
-As otimizações são intenções implementadas, não medições de CPU/GPU já comprovadas. O custo do P2P cresce com os espectadores; medir em quatro espectadores com um jogo exigente é condição para ajustar o perfil. O browser decide codificação e aceleração. A captura 720p30 é alvo, não promessa universal.
+As otimizações são intenções implementadas, não medições de CPU/GPU já comprovadas. O custo do P2P cresce com os espectadores; medir em sete espectadores com um jogo exigente é condição para ajustar o perfil. O browser decide codificação e aceleração. A captura 720p30 é alvo, não promessa universal.

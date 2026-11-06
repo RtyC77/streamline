@@ -7,6 +7,7 @@ import { enter, parseInvite } from "../services/rooms";
 import { explain } from "../services/errors";
 import type { Entry } from "../types";
 import {AdminEntry} from '../components/AdminEntry';
+import {RoomCapacity,DEFAULT_CAPACITY} from '../components/RoomCapacity';
 export function HomePage({
   onEnter,
   message,
@@ -23,6 +24,7 @@ export function HomePage({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [captcha, setCaptcha] = useState("");
+  const [capacity, setCapacity] = useState(DEFAULT_CAPACITY);
   const clearError = useCallback((e: unknown) => setError(explain(e)), []);
   const enterRoom = async (join: boolean) => {
     if (busy) return;
@@ -32,7 +34,7 @@ export function HomePage({
       if (nickname.trim().length < 2)
         throw new Error("Escolha um apelido de 2 a 24 caracteres.");
       const id = await authenticate(captcha);
-      const data = await enter(nickname, join ? invite : undefined);
+      const data = await enter(nickname, join ? invite : undefined, capacity);
       localStorage.setItem("streamlite-nickname", nickname.trim());
       const token = data.invite ?? invite;
       // Normalize a pasted URL before preserving the invitation in the fragment.
@@ -71,7 +73,7 @@ export function HomePage({
             </span>
             <span>
               <Icon name="users" size={17} />
-              Até 5 pessoas
+              De 2 a 8 pessoas
             </span>
             <span>
               <Icon name="screen" size={17} />
@@ -122,6 +124,7 @@ export function HomePage({
               onChange={(e) => setNickname(e.target.value)}
               disabled={busy}
             />
+            <RoomCapacity value={capacity} onChange={setCapacity} disabled={busy}/>
             <button
               className="primary wide"
               type="button"

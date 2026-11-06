@@ -1,3 +1,8 @@
+.room-capacity{border:1px solid var(--border);border-radius:12px;margin:18px 0;padding:14px;min-width:0}
+.capacity-title,.capacity-scale{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.capacity-title label{margin:0;font-size:12px}.capacity-title output{font-size:12px;color:#c7f2e1;white-space:nowrap}
+.room-capacity input[type=range]{width:100%;padding:0;margin:12px 0 4px;min-height:24px;accent-color:#8de4c4;cursor:pointer}
+.capacity-scale{font-size:10px;color:var(--muted)}.room-capacity p{font-size:11px;line-height:1.6;margin:10px 0 0}.room-capacity strong{font-weight:600;color:#dce6ed}.room-capacity summary{cursor:pointer;font-size:11px;color:#9bcab9;margin-top:12px}
 .admin-entry{font-size:11px;white-space:nowrap}
 .admin-dialog{width:min(680px,calc(100% - 24px));max-height:85dvh;overflow:auto}
 .admin-dialog form{margin-top:22px}.admin-dialog form input{margin-bottom:16px}.admin-dialog form button{margin-top:8px}
