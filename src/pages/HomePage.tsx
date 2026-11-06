@@ -97,15 +97,13 @@ export function HomePage({
             <small>Conexão direta. Momentos compartilhados.</small>
           </div>
         </div>
-        <section className="entry-card" aria-labelledby="entry-title">
+        <section className="entry-card" aria-label="Criar ou entrar em uma sala">
           <div className="card-top">
             <span className="card-symbol">
               <Icon name="screen" size={23} />
             </span>
             <span className="mini-tag">SALA PRIVADA</span>
           </div>
-          <h2 id="entry-title">Bora assistir juntos?</h2>
-          <p>Escolha seu apelido e reúna a galera.</p>
           <form
             onSubmit={(e) => {
               e.preventDefault();
