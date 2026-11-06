@@ -18,7 +18,7 @@ export async function captureGame(): Promise<CaptureInfo> {
       "Use Chrome ou Edge atualizado em HTTPS (ou localhost) para compartilhar.",
     );
   // No standardized feature probe exists for DisplayMediaStreamOptions dictionary
-  // members. Unknown hints are ignored by conforming browsers; tracks are truth.
+  // members. Do not fall back to system audio or microphone when unsupported.
   const options: DisplayMediaStreamOptions & {
     windowAudio: string;
     systemAudio: string;
@@ -36,7 +36,7 @@ export async function captureGame(): Promise<CaptureInfo> {
       autoGainControl: false,
     },
     windowAudio: "window",
-    systemAudio: "include",
+    systemAudio: "exclude",
     selfBrowserSurface: "exclude",
     surfaceSwitching: "exclude",
   };
@@ -46,6 +46,16 @@ export async function captureGame(): Promise<CaptureInfo> {
     stream.getTracks().forEach((t) => t.stop());
     throw new Error("O navegador não retornou vídeo. Selecione outra janela.");
   }
+  // Entire-screen audio can include every application. Drop it before any peer
+  // sees the stream. An unidentified surface cannot establish the requested scope.
+  const surface = video.getSettings().displaySurface;
+  const scopedSurface = surface === "window" || surface === "browser";
+  const removedAudio = !scopedSurface && stream.getAudioTracks().length > 0;
+  if (!scopedSurface)
+    for (const audio of stream.getAudioTracks()) {
+      audio.stop();
+      stream.removeTrack(audio);
+    }
   let tuning = "Resolução e FPS solicitados ao navegador.";
   try {
     const supported = navigator.mediaDevices.getSupportedConstraints();
@@ -71,7 +81,9 @@ export async function captureGame(): Promise<CaptureInfo> {
     tuning,
     audio: stream.getAudioTracks().length
       ? "Trilha de áudio capturada"
-      : "Sem áudio: o navegador não disponibilizou uma trilha. O vídeo continua normalmente.",
+      : removedAudio
+        ? "Sem áudio: o som de tela inteira ou de fonte não identificada foi desativado. Selecione a janela do jogo ou uma aba para solicitar apenas o áudio dessa fonte."
+        : "Sem áudio: o navegador não disponibilizou áudio da janela ou aba selecionada. O vídeo continua normalmente.",
   };
 }
 export function preferCodecs(pc: RTCPeerConnection) {

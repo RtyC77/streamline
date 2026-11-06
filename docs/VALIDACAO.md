@@ -29,6 +29,13 @@
 - [ ] Negar/cancelar permissão não deixa concessão ou captura ativa.
 - [ ] Não há pedido de microfone/webcam.
 
+## Isolamento do áudio
+
+- [ ] Compartilhe a janela do jogo com áudio de janela, quando oferecido pelo navegador. Toque também um som em outro aplicativo e confirme no espectador que somente o jogo é audível.
+- [ ] Compartilhe uma aba com áudio: o som de outra aba/aplicativo deve ficar de fora.
+- [ ] Compartilhe uma tela inteira: a aplicação deve manter vídeo e remover qualquer trilha de áudio global, com aviso.
+- [ ] Se o navegador oferecer apenas áudio do sistema para a janela, deixe-o desmarcado; confirme que a transmissão continua sem áudio. Registre a versão e o sistema operacional nesse resultado.
+
 ## Grupo e concorrência
 
 - [ ] Entre com até cinco identidades em computadores/perfis independentes; verifique quatro espectadores simultâneos.

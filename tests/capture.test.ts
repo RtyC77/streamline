@@ -1,18 +1,32 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { captureGame, tuneSender } from "../src/media/capture";
-function prepare(audio = false, video = true) {
+function prepare(
+  audio = false,
+  video = true,
+  surface: MediaTrackSettings["displaySurface"] | null = "window",
+) {
   const track = {
     kind: "video",
     stop: vi.fn(),
     applyConstraints: vi.fn(async () => undefined),
-    getSettings: () => ({ width: 1280, height: 720, frameRate: 30 }),
+    getSettings: () => ({
+      width: 1280,
+      height: 720,
+      frameRate: 30,
+      displaySurface: surface ?? undefined,
+    }),
     contentHint: "",
   };
   const sound = { kind: "audio", stop: vi.fn() };
+  const tracks = [...(video ? [track] : []), ...(audio ? [sound] : [])];
   const stream = {
-    getTracks: () => [...(video ? [track] : []), ...(audio ? [sound] : [])],
-    getVideoTracks: () => (video ? [track] : []),
-    getAudioTracks: () => (audio ? [sound] : []),
+    getTracks: () => [...tracks],
+    getVideoTracks: () => tracks.filter((t) => t.kind === "video"),
+    getAudioTracks: () => tracks.filter((t) => t.kind === "audio"),
+    removeTrack: vi.fn((removed: typeof track | typeof sound) => {
+      const index = tracks.indexOf(removed);
+      if (index >= 0) tracks.splice(index, 1);
+    }),
   };
   const display = vi.fn(async () => stream);
   const mic = vi.fn();
@@ -33,6 +47,37 @@ function prepare(audio = false, video = true) {
 }
 afterEach(() => vi.unstubAllGlobals());
 describe("Captura respeita o navegador", () => {
+  it("solicita apenas áudio da janela e exclui áudio global sem fallback", async () => {
+    const p = prepare(true);
+    await captureGame();
+    expect(p.display).toHaveBeenCalledWith(
+      expect.objectContaining({
+        systemAudio: "exclude",
+        windowAudio: "window",
+      }),
+    );
+    expect(p.display).toHaveBeenCalledTimes(1);
+    expect(p.mic).not.toHaveBeenCalled();
+  });
+  it.each(["monitor", null] as const)(
+    "remove áudio de fonte %s antes de entregar a captura",
+    async (surface) => {
+      const p = prepare(true, true, surface);
+      const result = await captureGame();
+      expect(p.sound.stop).toHaveBeenCalledOnce();
+      expect(p.stream.removeTrack).toHaveBeenCalledWith(p.sound);
+      expect(result.stream.getAudioTracks()).toHaveLength(0);
+      expect(result.stream.getVideoTracks()).toHaveLength(1);
+      expect(p.track.stop).not.toHaveBeenCalled();
+      expect(result.audio).toMatch(/desativado/);
+    },
+  );
+  it("preserva a trilha de áudio retornada para uma aba compartilhada", async () => {
+    const p = prepare(true, true, "browser");
+    const result = await captureGame();
+    expect(result.stream.getAudioTracks()).toHaveLength(1);
+    expect(p.sound.stop).not.toHaveBeenCalled();
+  });
   it("continua com vídeo sem áudio e não solicita microfone", async () => {
     const p = prepare();
     const result = await captureGame();

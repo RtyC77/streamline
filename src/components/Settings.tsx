@@ -52,6 +52,10 @@ export function Settings({
           <dd>{audio}</dd>
         </div>
         <div>
+          <dt>Fonte de áudio permitida</dt>
+          <dd>Janela ou aba selecionada</dd>
+        </div>
+        <div>
           <dt>Sinalização</dt>
           <dd>{connection}</dd>
         </div>
