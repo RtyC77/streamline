@@ -191,6 +191,8 @@ Antes de promover o MVP a validado: execute [docs/VALIDACAO.md](docs/VALIDACAO.m
 
 ## 11. Administração de salas
 
+Novas salas recebem automaticamente o nome `Sala de <apelido do criador>`. Aplique também a migration `202611060006_room_creator_name.sql` no SQL Editor depois das anteriores. O nome é salvo na criação e aparece tanto para os participantes quanto na administração; salas existentes mantêm seus nomes.
+
 O botão **Administração** no topo permite listar e finalizar salas com credenciais verificadas por uma Edge Function. A lista é carregada somente quando solicitada. A ativação exige a migration `202611060005_admin.sql`, os segredos administrativos e o deploy da função `admin-panel`: siga [docs/ADMINISTRACAO.md](docs/ADMINISTRACAO.md). Finalizar uma sala invalida seu convite e libera sua vaga na cota de três salas recentes ativas por usuário.
 
 ## Referências técnicas

@@ -50,6 +50,7 @@ await db.exec(
   ),
 );
 await db.exec(await readFile(new URL('../supabase/migrations/202611060005_admin.sql',import.meta.url),'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/202611060006_room_creator_name.sql',import.meta.url),'utf8'));
 async function as(i) {
   await db.exec("reset role");
   await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
@@ -85,6 +86,7 @@ try {
     token = entry.invite;
   ok(/^[a-f0-9]{64}$/.test(token), "convite imprevisível gerado");
   ok(entry.members.length === 1, "criador associado à sala");
+  ok(entry.room.name === 'Sala de Anfitrião', 'sala recebe o apelido do criador');
   ok(
     (await db.query("select * from public.rooms")).rows.length === 1,
     "membro autorizado lê sala",
