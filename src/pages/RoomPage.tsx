@@ -244,12 +244,6 @@ export function RoomPage({
       </aside>
       <main className="room-main">
         <header className="room-header">
-          <div>
-            <span className="breadcrumb">
-              SUA SALA <span>/</span> TRANSMISSÃO
-            </span>
-            <h1>O próximo play é de vocês.</h1>
-          </div>
           <span className="p2p-badge">
             <span className="status-dot" />
             WebRTC P2P
@@ -285,27 +279,25 @@ export function RoomPage({
                 <Icon name="screen" size={46} />
                 {media.sharing && <span className="status-dot" />}
               </div>
-              <span className="stage-eyebrow">
-                {media.sharing
-                  ? "SEU JOGO ESTÁ AO VIVO"
-                  : host
-                    ? "CONECTANDO AO JOGO"
-                    : "A SALA É DE VOCÊS"}
-              </span>
-              <h2>
-                {media.sharing
-                  ? "Pode voltar para o jogo."
-                  : host
-                    ? "Preparando a transmissão…"
-                    : "Um jogo. A galera toda."}
-              </h2>
-              <p>
-                {media.sharing
-                  ? `${media.connections} espectador(es) conectado(s). Sem prévia local para poupar recursos.`
-                  : host
-                    ? "Estabelecendo uma conexão direta e segura com o transmissor."
-                    : "Compartilhe sua janela e deixe seus amigos acompanharem cada jogada."}
-              </p>
+              {(media.sharing || host) && (
+                <>
+                  <span className="stage-eyebrow">
+                    {media.sharing
+                      ? "SEU JOGO ESTÁ AO VIVO"
+                      : "CONECTANDO AO JOGO"}
+                  </span>
+                  <h2>
+                    {media.sharing
+                      ? "Pode voltar para o jogo."
+                      : "Preparando a transmissão…"}
+                  </h2>
+                  <p>
+                    {media.sharing
+                      ? `${media.connections} espectador(es) conectado(s). Sem prévia local para poupar recursos.`
+                      : "Estabelecendo uma conexão direta e segura com o transmissor."}
+                  </p>
+                </>
+              )}
               {!host && !media.sharing && (
                 <button
                   className="primary"

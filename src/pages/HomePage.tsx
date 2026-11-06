@@ -49,10 +49,6 @@ export function HomePage({
     <div className="home">
       <header className="home-header">
         <Brand />
-        <span className="header-tag">
-          <span className="status-dot" />
-          Seu jogo. Sua galera.
-        </span>
       </header>
       <main className="home-main">
         <div className="hero">
@@ -66,10 +62,6 @@ export function HomePage({
             <br />
             <span>por perto.</span>
           </h1>
-          <p className="hero-description">
-            Compartilhe aquele momento com quem joga com você. Vídeo e áudio em
-            uma sala privada, direto do navegador.
-          </p>
           <div className="feature-row">
             <span>
               <Icon name="lock" size={17} />
@@ -192,7 +184,6 @@ export function HomePage({
         </section>
       </main>
       <footer className="home-footer">
-        <span>FEITO PARA COMPARTILHAR O PLAY</span>
         <span>
           Chrome ou Edge no Windows <span className="footer-separator">/</span>{" "}
           WebRTC P2P

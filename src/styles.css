@@ -422,9 +422,6 @@ h2 {
   font-size: 10px;
   letter-spacing: 0.8px;
 }
-.home-footer > span:first-child {
-  letter-spacing: 1.7px;
-}
 .footer-separator {
   margin: 0 12px;
   color: #3c4552;
@@ -636,10 +633,10 @@ h2 {
 .room-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding-bottom: 29px;
+  justify-content: flex-end;
+  padding-bottom: 16px;
   border-bottom: 1px solid #282e38;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
   gap: 16px;
 }
 .breadcrumb {
