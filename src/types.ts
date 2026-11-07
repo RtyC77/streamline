@@ -55,6 +55,9 @@ export interface PeerMetric {
   limitation?: string;
 }
 export interface MediaState {
+  switching?: boolean;
+  switchTiming?: SwitchTiming;
+  connectionIssue?: string;
   captureAudio?: string;
   selected?: string | null;
   sharing: boolean;
@@ -63,3 +66,4 @@ export interface MediaState {
   connections: number;
   status: string;
 }
+export interface SwitchTiming { requestedMs: number; offerMs?: number; connectedMs?: number; firstFrameMs?: number }

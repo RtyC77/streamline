@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-06",
+  "passed": true,
+  "scope": "WebRTC real no mesmo navegador com três fontes de vídeo sintético, sinalização em memória e sem áudio. Não valida computadores ou redes diferentes nem Supabase gerenciado.",
+  "repeatedClicksBlocked": true,
+  "additionalRequestsFromRepeatedClicks": false,
+  "liveReceiversPerViewer": 1,
+  "warnings": [],
+  "switches": [
+    {"screen": 2, "requestedMs": 0, "offerMs": 7, "connectedMs": 134, "firstFrameMs": 145},
+    {"screen": 3, "requestedMs": 0, "offerMs": 7, "connectedMs": 125, "firstFrameMs": 135},
+    {"screen": 1, "requestedMs": 0, "offerMs": 6, "connectedMs": 124, "firstFrameMs": 135},
+    {"screen": 3, "requestedMs": 0, "offerMs": 6, "connectedMs": 123, "firstFrameMs": 136},
+    {"screen": 2, "requestedMs": 0, "offerMs": 6, "connectedMs": 124, "firstFrameMs": 134},
+    {"screen": 1, "requestedMs": 0, "offerMs": 7, "connectedMs": 136, "firstFrameMs": 147}
+  ]
+}

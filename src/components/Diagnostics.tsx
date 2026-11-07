@@ -1,4 +1,4 @@
-import type { Member, PeerMetric } from "../types";
+import type { Member, PeerMetric, SwitchTiming } from "../types";
 const number = (n: number | undefined, suffix = "") =>
   n === undefined
     ? "Indisponível"
@@ -6,15 +6,18 @@ const number = (n: number | undefined, suffix = "") =>
 export function Diagnostics({
   metrics,
   members,
+  switchTiming,
 }: {
   metrics: PeerMetric[];
   members: Member[];
+  switchTiming?:SwitchTiming;
 }) {
   return (
     <section className="diagnostics" aria-label="Diagnóstico técnico">
       <div className="section-label">
         Diagnóstico WebRTC · atualização a cada 5 s
       </div>
+      {switchTiming&&<p>Troca de tela · pedido: {number(switchTiming.requestedMs,' ms')} · resposta: {number(switchTiming.offerMs,' ms')} · conexão: {number(switchTiming.connectedMs,' ms')} · primeiro quadro: {number(switchTiming.firstFrameMs,' ms')}. Tempos desde o início da tentativa, medidos localmente.</p>}
       {metrics.length === 0 ? (
         <p>
           As métricas aparecerão quando uma conexão de mídia for estabelecida.

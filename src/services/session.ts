@@ -37,6 +37,8 @@ export class RoomSession {
   private session: string | null = null;
   private online = new Set<string>();
   private starting = false;
+  private captureCleanup:(()=>void)|null=null;
+  private stopCapture(){const cleanup=this.captureCleanup;this.captureCleanup=null;cleanup?.();this.peers?.stopLocal();}
   private iceRefreshed = Date.now();
   private diagnostics = false;
   private background: BackgroundTimeout | null = null;
@@ -132,7 +134,7 @@ export class RoomSession {
         now - this.lastPulse > (this.session ? 30_000 : 55_000)
       ) {
         this.interrupted = true;
-        this.peers?.stopLocal();
+        this.stopCapture();
         this.session = null;
         this.callbacks.connection("Conexão interrompida");
       }
@@ -154,7 +156,7 @@ export class RoomSession {
   private async apply(state: Snapshot) {
     if (this.closed) return;
     if(this.session&&!activeStreams(state).some(s=>s.broadcaster_id===this.self&&s.session_id===this.session)){
-      this.session=null;this.peers?.stopLocal();this.background?.refresh();
+      this.session=null;this.stopCapture();this.background?.refresh();
     }
     if (this.applied && sameSnapshot(this.state, state)) return;
     this.applied = true;
@@ -220,6 +222,7 @@ export class RoomSession {
   }
   async share(capture: CaptureInfo) {
     if (this.closed || this.starting) {
+      capture.dispose?.();
       capture.stream.getTracks().forEach((t) => t.stop());
       return;
     }
@@ -252,6 +255,7 @@ export class RoomSession {
           capture.stream.getVideoTracks()[0]?.readyState !== "live"
         )
           throw new Error("A sala ou a captura foi encerrada.");
+        this.captureCleanup=capture.dispose??null;
         this.peers?.setLocal(capture.stream, claimed, capture.audio,capture.profile,poster);
         capture.stream.getVideoTracks()[0].addEventListener(
           "ended",
@@ -263,6 +267,7 @@ export class RoomSession {
         void this.signaling?.notifyChange().catch(this.callbacks.error);
       });
     } catch (e) {
+      capture.dispose?.();this.captureCleanup=null;
       capture.stream.getTracks().forEach((t) => t.stop());
       if (claimed) {
         const failedSession = claimed;
@@ -281,17 +286,17 @@ export class RoomSession {
     const session = this.session;
     this.session = null;
     this.background?.refresh();
-    this.peers?.stopLocal();
+    this.stopCapture();
     if (session)
       await this.enqueue(() => releaseStream(this.state.room.id, session));
     void this.signaling?.notifyChange().catch(this.callbacks.error);
     if (!this.closed) await this.tick(true);
   }
   watch(session:string){
-    if(this.closed)return;
-    this.peers?.select(session);
-    if(this.connected)void this.peers?.maintain().catch(this.callbacks.error);
+    if(this.closed||!this.connected)return false;
+    return this.peers?.requestSelect(session)??false;
   }
+  firstFrame(session:string,stream:MediaStream){if(!this.closed)this.peers?.firstFrame(session,stream);}
   rememberPreview(session:string,image:string){this.peers?.rememberPreview(session);this.callbacks.preview?.(session,image);}
   async kick(user: string) {
     if (this.closed) return;
@@ -303,6 +308,7 @@ export class RoomSession {
   }
   async close(voluntary = false) {
     this.closed = true;
+    const cleanup=this.captureCleanup;this.captureCleanup=null;cleanup?.();
     this.background?.dispose();
     if (this.timer) clearInterval(this.timer);
     window.removeEventListener("online", this.onOnline);

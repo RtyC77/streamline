@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Brand, Icon } from "../components/Icon";
 import { Player } from "../components/Player";
+import {TransitionCover} from '../components/TransitionCover';
 import { Diagnostics } from "../components/Diagnostics";
 import { Settings } from "../components/Settings";
 import {ShareOptions} from '../components/ShareOptions';
@@ -118,6 +119,7 @@ export function RoomPage({
       const capture = await captureGame(requested);
       setProfile(requested);setShareOptions(false);
       if (!session.current) {
+        capture.dispose?.();
         capture.stream.getTracks().forEach((t) => t.stop());
         return;
       }
@@ -285,15 +287,15 @@ export function RoomPage({
             <Icon name="chart" />
           </button>
         </div>
-        {streams.length>0&&<div className="stream-picker" aria-label="Telas compartilhadas">
-          {streams.map(stream=>{const member=snapshot.members.find(m=>m.user_id===stream.broadcaster_id);const current=stream.session_id===media.selected;return <button key={stream.session_id} className={`stream-tile ${current?'selected':''}`} aria-pressed={current} onClick={()=>{if(!current){freeze.current?.();session.current?.watch(stream.session_id);}}}>
+        {streams.length>0&&<div className="stream-picker" aria-label="Telas compartilhadas" aria-busy={media.switching===true}>
+          {streams.map(stream=>{const member=snapshot.members.find(m=>m.user_id===stream.broadcaster_id);const current=stream.session_id===media.selected;return <button key={stream.session_id} className={`stream-tile ${current?'selected':''}`} aria-pressed={current} disabled={media.switching||(current&&!media.connectionIssue)} onClick={()=>{if(!media.switching&&(!current||media.connectionIssue)){freeze.current?.();session.current?.watch(stream.session_id);}}}>
             <div className="stream-still">{posters[stream.session_id]?<img src={posters[stream.session_id]} alt="Quadro congelado da transmissão"/>:<Icon name="screen" size={28}/>}<span>{current?'Selecionada':posters[stream.session_id]?'Congelada':'Prévia indisponível'}</span></div>
             <strong>{member?.nickname??'Participante'}{stream.broadcaster_id===self?' · você':''}</strong>
           </button>;})}
         </div>}
         <div className="stage" ref={stage}>
           {media.remote ? (
-            <Player key={media.selected} stream={media.remote} volume={volume} onError={setError} freeze={freeze} onStill={image=>{if(media.selected)session.current?.rememberPreview(media.selected,image);}}/>
+            <Player key={media.selected} stream={media.remote} volume={volume} onError={setError} freeze={freeze} poster={media.selected?posters[media.selected]:undefined} onReady={()=>{if(media.selected&&media.remote)session.current?.firstFrame(media.selected,media.remote);}} onStill={image=>{if(media.selected)session.current?.rememberPreview(media.selected,image);}}/>
           ) : (
             <div className="stage-empty">
               <div
@@ -343,6 +345,7 @@ export function RoomPage({
               </span>
             </div>
           )}
+          {!media.remote&&selected&&selected.broadcaster_id!==self&&<TransitionCover poster={posters[selected.session_id]} failed={!media.switching&&!!media.connectionIssue}/>}
           <div className="stage-caption">
             <span>
               <Icon name="lock" size={13} />
@@ -428,6 +431,7 @@ export function RoomPage({
             </button>
           </div>
         </div>
+        {media.connectionIssue && <div className="notice room-message" role="status">{media.connectionIssue}</div>}
         {error && (
           <div className="error room-message" role="alert">
             <span>{error}</span>
@@ -452,7 +456,7 @@ export function RoomPage({
           </div>
         )}
         {diagnostics && (
-          <Diagnostics metrics={metrics} members={snapshot.members} />
+          <Diagnostics metrics={metrics} members={snapshot.members} switchTiming={media.switchTiming}/>
         )}
         <div className="room-footnote">
           <Icon name="screen" size={16} />

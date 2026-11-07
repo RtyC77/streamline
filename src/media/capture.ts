@@ -1,5 +1,6 @@
 import {defaultProfile,videoProfile,type CaptureProfile} from './profile';
 export interface CaptureInfo {
+  dispose?:()=>void;
   stream: MediaStream;
   settings: MediaTrackSettings;
   audio: string;

@@ -135,6 +135,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("Ciclo da sala e respostas concorrentes", () => {
+  it('libera a captura nativa uma vez ao parar e sair',async()=>{
+    const {session}=setup();await session.start();await flush();const source=capture();source.info.dispose=vi.fn();await session.share(source.info);await session.stop();await session.close();expect(source.info.dispose).toHaveBeenCalledOnce();
+  });
+  it('libera a captura nativa se a concessão for recusada',async()=>{
+    const {session}=setup();await session.start();await flush();mocks.claim.mockRejectedValueOnce(new Error('Sala cheia'));const source=capture();source.info.dispose=vi.fn();await expect(session.share(source.info)).rejects.toThrow('Sala cheia');expect(source.info.dispose).toHaveBeenCalledOnce();expect(source.track.stop).toHaveBeenCalled();await session.close();
+  });
   it("encerra a sessão e volta à entrada quando o servidor remove a associação", async () => {
     const { session, expired } = setup();
     await session.start();
