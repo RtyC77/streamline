@@ -1,43 +1,73 @@
-# Administração de salas
+# Contas, permissões e administração
 
-O botão **Administração** aparece no topo da página inicial e da sala. O servidor valida usuário e senha; as permissões administrativas não dependem de esconder esse botão. Participantes anônimos não podem executar as RPCs administrativas.
+O Supabase Auth gerencia e-mail, senha, confirmação, recuperação e sessão. O UUID de `auth.users` identifica o perfil, o criador da sala e seus participantes. As senhas de conta ficam no Supabase Auth. Os nomes de usuário têm de 2 a 24 caracteres e são únicos sem distinção de maiúsculas. Contas novas começam ativas, com cargo `user` e sem permissão de criação.
 
-## Ativar no projeto Supabase
+| Operação | Usuário ativo e verificado | Admin | SuperAdmin |
+| --- | --- | --- | --- |
+| Entrar em salas conforme o modo de acesso | Sim | Sim | Sim |
+| Criar salas com permissão concedida | Sim | Sim | Sim |
+| Consultar usuários, último login e histórico administrativo | | Sim | Sim |
+| Conceder ou revogar criação de salas | | Usuários e outros Admins | Outras contas |
+| Bloquear ou desbloquear | | Usuários comuns | Outras contas |
+| Promover usuário a Admin ou rebaixar Admin a usuário | | | Sim |
+| Listar e finalizar salas como administrador | | | Sim |
 
-1. Abra o **SQL Editor** do projeto e execute o conteúdo de `supabase/migrations/202611060005_admin.sql` uma vez, depois das migrations anteriores. Isso adiciona as funções administrativas e altera a cota para três salas **ativas** criadas na última hora por usuário. Salas finalizadas liberam essa cota; o limitador de tentativas por minuto continua existindo.
-2. O arquivo local `.env.admin.local` já foi preparado nesta máquina com o usuário `Admin`, o hash da senha solicitada, um segredo aleatório para assinar sessões e a origem de produção. Ele está ignorado pelo Git. Não publique esse arquivo nem adicione essas variáveis ao Cloudflare ou com prefixo `VITE_`.
-3. No PowerShell, dentro de `E:\StreamLine`, execute os comandos abaixo. É necessário Node.js 24 e npm disponíveis. O primeiro comando abrirá a autenticação da sua conta Supabase; os demais enviam os segredos e publicam a função. Não é necessário informar a senha do banco.
+## Banco e controle de acesso
+
+- `202611120011_accounts.sql` adiciona perfis, histórico e funções. Contas de e-mail preexistentes recebem um nome técnico único e as permissões padrão. O titular pode alterar esse nome no perfil. Identidades anônimas antigas ficam sem acesso e suas participações são removidas na migração. A identidade do criador de salas antigas e os nomes já registrados são preservados.
+- `profiles.own_profile` permite ler o próprio perfil, inclusive para mostrar o estado de bloqueio. `update_own_username` valida conta ativa e verificada, unicidade e nome reservado. A tabela não aceita alterações diretas pelos clientes.
+- `admin_audit_logs` tem RLS habilitada e nenhuma política direta para clientes. As operações administrativas usam RPCs com validação de cargo. A listagem devolve apenas os campos administrativos, e o último login vem de `auth.users.last_sign_in_at`. O histórico registra o autor, o alvo, a ação e os estados relevantes.
+- `rooms_read`, `members_read`, `streams_read`, `streamlite_receive` e `streamlite_send` passam a exigir conta ativa e verificada pelo helper de associação. As RPCs de criação, ingresso, presença, encerramento e TURN validam o estado no banco. Convites e hashes de senha das salas continuam privados.
+- O bloqueio remove as participações e concessões de transmissão da conta e troca os tópicos afetados. A interface consulta o próprio perfil a cada cinco segundos em primeiro plano e ao recuperar o foco. A criação e as demais operações protegidas usam os dados atuais do banco mesmo se a tela estiver desatualizada.
+- Alterações administrativas usam bloqueio transacional e versão do perfil. Um gatilho preserva o último SuperAdmin ativo quando um perfil é removido, bloqueado ou rebaixado. Nenhuma RPC do painel concede o cargo de SuperAdmin.
+
+## Implantação
+
+1. Confira as migrations já aplicadas e faça a validação inicial em um projeto de testes. A migração de contas restringe o acesso no momento em que é aplicada. Coordene a publicação do frontend e o corte para evitar que clientes antigos tentem ingressar com sessões anônimas.
+2. No Supabase hospedado, habilite cadastro por e-mail e **Confirm Email**, configure senha mínima de oito caracteres e desabilite novos logins anônimos. Configure **Site URL** com a URL HTTPS do frontend e autorize a URL exata `/recuperar` nessa origem. Mantenha os templates de confirmação e recuperação com o link padrão `{{ .ConfirmationURL }}`. Configure SMTP e valide a entrega antes de liberar novos cadastros. [Configuração de Auth](https://supabase.com/docs/guides/auth/general-configuration)
+3. Em **Realtime Settings**, desabilite **Allow public access**. Se usar Turnstile, configure o segredo no Supabase Auth e a chave pública no build do frontend. Mantenha a Edge Function de TURN se o projeto usa TURN. [Autorização de Realtime](https://supabase.com/docs/guides/realtime/authorization)
+4. Aplique as migrations pendentes em ordem, até `202611120011_accounts.sql`. Use `supabase db push` em um projeto vinculado cuja tabela de histórico reflita as migrations aplicadas. Se a instalação foi feita pelo SQL Editor sem registro de histórico, confira primeiro o banco e aplique apenas os arquivos pendentes. Mantenha os agendamentos de `supabase/maintenance.sql`.
+5. Inicialize Rod com o procedimento abaixo. Publique a raiz atual no repositório e na branch associados ao Cloudflare Pages. Use Node 24, `npm run build` e diretório de saída `dist`. A regra de fallback em `public/_redirects` precisa servir `/admin` e `/recuperar` diretamente.
+6. Valide o login de Rod e as operações do painel pela URL publicada. Depois execute `supabase/retire-temporary-admin.sql` como `postgres` no SQL Editor. O script exige o perfil definitivo ativo com último login registrado e remove o gate antigo e os privilégios das RPCs legadas. Exclua a Edge Function hospedada `admin-panel` e remova seus segredos `ADMIN_LOGIN`, `ADMIN_PASSWORD_HASH` e `ADMIN_SESSION_SECRET`. Preserve `ALLOWED_ORIGINS` se o TURN o utiliza. Se existir um arquivo local de segredos do painel antigo, remova-o do armazenamento operacional após a transição.
+
+### Variáveis
+
+| Ambiente | Variáveis |
+| --- | --- |
+| Build do frontend | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` |
+| Build com CAPTCHA | `VITE_TURNSTILE_SITE_KEY` |
+| Build com TURN | `VITE_TURN_FUNCTION`, `VITE_ICE_SERVERS`, `VITE_ICE_TRANSPORT_POLICY`, conforme a configuração existente |
+| Processo confiável de inicialização | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPERADMIN_BOOTSTRAP_PASSWORD` |
+| Processo confiável com CAPTCHA ativo | `SUPERADMIN_BOOTSTRAP_CAPTCHA_TOKEN`, token válido para uma tentativa de login |
+
+### Inicializar o SuperAdmin
+
+Injete os segredos no ambiente do processo por um gerenciador de segredos ou mecanismo equivalente da sua infraestrutura. Execute da raiz, em uma estação administrativa ou executor confiável.
 
 ```powershell
-cd E:\StreamLine
-npx supabase login
-npx supabase secrets set --project-ref gfxykbrguweeylzgbvbu --env-file .env.admin.local
-npx supabase functions deploy admin-panel --project-ref gfxykbrguweeylzgbvbu
+npm run bootstrap:superadmin
 ```
 
-Se somente o npm local deste workspace estiver disponível, substitua cada `npx supabase` por `node .tools/package/bin/npm-cli.js exec --yes --package=supabase -- supabase`.
+O script procura `ropolatto77@gmail.com` no Auth. Se não existir, cria a conta `Rod` com e-mail confirmado no ambiente administrativo. Antes desse passo, o operador deve confirmar que controla o endereço indicado. Se a conta existir, o script exige e-mail confirmado e uma senha válida para a conta existente. A senha fornecida deve ter pelo menos 12 caracteres e até 72 bytes. O script valida o login pelo endpoint público antes de elevar o UUID e, com a mesma sessão, verifica a lista de usuários, o histórico e a lista de salas. Uma nova execução com as mesmas condições mantém o perfil e evita duplicar o registro de inicialização.
 
-A função usa a chave de servidor injetada pelo ambiente Supabase (`SUPABASE_SECRET_KEYS.default`, com compatibilidade para `SUPABASE_SERVICE_ROLE_KEY`). Nenhuma delas é enviada ao navegador. `verify_jwt = false` em `supabase/config.toml` permite o login administrativo sem sessão Auth; a própria função exige senha ou token administrativo válido para autorizar operações.
-
-Alternativa para os segredos: no Dashboard, **Edge Functions → Secrets**, cadastre as quatro variáveis do arquivo local. Ainda é preciso publicar os dois arquivos da função `admin-panel` com o comando acima. [Documentação oficial de segredos](https://supabase.com/docs/guides/functions/secrets).
-
-## Usar
-
-1. Abra https://streamline-cfw.pages.dev e clique em **Administração**.
-2. Entre com o usuário e a senha configurados.
-3. A lista mostra todas as salas ainda não expiradas, inclusive salas sem participantes, com contagem de participantes recentes e indicação de transmissão.
-4. Clique em **Finalizar sala** e confirme a sala exibida. O convite é invalidado, os participantes são removidos e a transmissão perde sua autorização. A remoção se propaga pelo aviso Realtime e pela próxima reconciliação: normalmente até 20 segundos no transmissor ou 30 segundos nos espectadores. Abas suspensas conferem a autorização ao retomar.
-
-A listagem é consultada somente ao entrar, ao clicar em **Atualizar** ou após finalizar uma sala. O painel é carregado sob demanda e não mantém um canal Realtime ou consultas periódicas adicionais.
-
-## Sessão e troca de senha
-
-O token fica somente na memória do painel e expira após 15 minutos. Fechar o painel ou clicar em **Sair** apaga a sessão local. A senha é armazenada no servidor como PBKDF2-SHA256 com salt aleatório e 600 mil iterações. Há um orçamento global de 20 tentativas de login a cada janela de 15 minutos, persistido no banco.
-
-Quem conhecer as credenciais poderá entrar: este login compartilhado não verifica a identidade pessoal do proprietário. Para trocar a senha e revogar tokens emitidos, execute `node scripts/configure-admin.mjs`, informe a nova senha no prompt oculto e envie novamente o arquivo com `supabase secrets set`. O script também gera um novo segredo de sessão. Não é necessário publicar o frontend novamente.
-
-Se usar outro domínio, atualize `ALLOWED_ORIGINS` no arquivo local e envie os segredos novamente. Use origens completas sem barra final, separadas por vírgula; para teste local, acrescente `http://localhost:5173` explicitamente.
+Em projetos com CAPTCHA ativo, a validação de senha exige um token válido. Para uma instalação nova, inicialize antes de habilitar CAPTCHA e antes de abrir o cadastro público. Para uma instalação existente, forneça um token obtido pelo fluxo autorizado do projeto. Ao terminar, remova os segredos de inicialização do ambiente do processo. Nenhuma variável privilegiada usa o prefixo `VITE_`.
 
 ## Validação
 
-Os testes automatizados verificam autenticação, token adulterado/expirado, origem não autorizada, limitação de tentativas, bloqueio das RPCs para participantes, encerramento e liberação de cota. A execução SQL local usa PostgreSQL WASM (PGlite); a Edge Function hospedada e a propagação pelo Realtime gerenciado ainda precisam ser testadas após a configuração real.
+```powershell
+npm test
+npm run test:db
+npm run build
+```
+
+O teste SQL cobre migrations, RLS, privilégios de RPC, perfil no cadastro, verificação, criação com e sem permissão, alteração sem novo login, bloqueio com sessão aberta, auditoria, acesso de Rod e retirada do caminho legado. O Auth e o Realtime gerenciados requerem o ambiente de testes.
+
+Em um projeto Supabase de testes com migrations aplicadas e CAPTCHA desativado, configure `STREAMLITE_TEST_SUPABASE_URL`, `STREAMLITE_TEST_PUBLISHABLE_KEY` e os pares `STREAMLITE_TEST_<CONTA>_EMAIL` e `STREAMLITE_TEST_<CONTA>_PASSWORD`, com `<CONTA>` igual a `HOST`, `GUEST` e `OUTSIDER`. Use três contas confirmadas e ativas. Conceda criação apenas à conta `HOST`. Execute `npm run test:integration` para validar login, RPCs, presença e sinalização privada com o Supabase real.
+
+No frontend publicado, valide cadastro por e-mail, confirmação, recuperação em outro navegador, login persistente e por aba, logout, entrada por link, criação após concessão, revogação e bloqueio durante uma sessão. Em dois dispositivos, teste captura de tela com áudio e confirme que a sessão de um participante bloqueado é encerrada. Faça a mesma validação com TURN se estiver configurado.
+
+## Limites operacionais
+
+- O histórico de acessos exibe o último login disponível no Auth. O histórico completo deste painel cobre alterações administrativas.
+- WebRTC transmite mídia diretamente entre os navegadores. O banco revoga operações novas no momento da alteração. A desconexão de um fluxo já negociado depende da revalidação dos clientes e do fechamento dos peers. O Supabase Realtime mantém em cache a autorização de canais já abertos, e credenciais TURN emitidas continuam válidas até expirar. [Cache de autorização do Realtime](https://supabase.com/docs/guides/realtime/authorization#updating-rls-policies)
+- A sessão da aplicação estática é acessível ao JavaScript da origem. A política CSP existente continua a restringir a execução de scripts. Use HTTPS e mantenha dependências e configuração de Auth atualizadas. [Checklist de produção do Supabase](https://supabase.com/docs/guides/security/production-checklist)

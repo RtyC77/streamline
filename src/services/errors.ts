@@ -33,8 +33,6 @@ export function explain(error: unknown): string {
     return "Falha de rede. Verifique sua conexão e tente novamente.";
   if (/captcha/i.test(message))
     return "Valide a verificação de segurança e tente novamente.";
-  if (/anonymous.*disabled/i.test(message))
-    return "A entrada anônima está desativada no Supabase. Consulte o README.";
   return message && message.length < 240
     ? message
     : "Não foi possível concluir a operação. Tente novamente.";

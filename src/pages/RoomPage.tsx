@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "../components/Icon";
 import { Player } from "../components/Player";
 import { CameraPreview } from "../components/CameraPreview";
@@ -14,7 +14,7 @@ import { inviteLink } from "../services/rooms";
 import { explain } from "../services/errors";
 import { RoomSession } from "../services/session";
 import type { CameraView, MediaState, PeerMetric, Snapshot } from "../types";
-import {AdminEntry} from '../components/AdminEntry';
+import { ReleaseInfo } from "../components/ReleaseInfo";
 const initialMedia: MediaState = {
   sharing: false,
   remote: null,
@@ -27,11 +27,15 @@ export function RoomPage({
   self,
   invite,
   onLeave,
+  accountActions,
+  onLogout,
 }: {
   initial: Snapshot;
   self: string;
   invite: string;
   onLeave: (reason?: string) => void;
+  accountActions?: ReactNode;
+  onLogout?: () => void;
 }) {
   const [snapshot, setSnapshot] = useState(initial);
   const streams=activeStreams(snapshot);
@@ -346,6 +350,7 @@ export function RoomPage({
               <Icon name="settings" />
             </button>
           </div>
+          <ReleaseInfo />
         </div>
       </aside>
       <main className="room-main">
@@ -356,7 +361,13 @@ export function RoomPage({
             onClick={() => setSidebarOpen(!sidebarOpen)}>
             Detalhes da sala
           </button>
-          <AdminEntry/>
+          {(accountActions || onLogout) && <div className="account-actions">
+            {accountActions}
+            {onLogout && <button className="secondary" onClick={() => {
+              void (session.current?.close(true) ?? Promise.resolve()).catch(() => undefined)
+                .finally(() => { onLeave(); onLogout(); });
+            }}>Sair da conta</button>}
+          </div>}
           <span className="p2p-badge">
             <span className="status-dot" />
             WebRTC P2P

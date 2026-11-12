@@ -25,22 +25,18 @@ Preencha `.env` com a URL e a chave **publishable** do seu Supabase. Depois de c
 npm run dev
 ```
 
-Abra o endereço informado pelo Vite (normalmente `http://127.0.0.1:5173`). Sem configuração, a interface explica o que falta e os botões de acesso ficam desabilitados. Nunca há uma sala fictícia para substituir o backend.
+Abra o endereço informado pelo Vite (normalmente `http://127.0.0.1:5173`). A interface apresenta o login quando o Supabase está configurado.
 
 ## 2. Configurar o Supabase
 
 1. Crie um projeto Supabase dedicado ao StreamLite.
 2. Em **Connect / API Keys**, copie a Project URL e a chave pública publishable. Coloque-as em `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`. Não use secret key nem `service_role` no frontend.
-3. Em **Authentication → Sign In / Providers**, habilite entradas anônimas (**Allow anonymous sign-ins**). A aplicação cria uma identidade autenticada, mesmo sem email/senha.
-4. No **SQL Editor**, execute, nesta ordem, o conteúdo completo de:
-   - `supabase/migrations/202611050001_rooms.sql`
-   - `supabase/migrations/202611050002_turn.sql`
-   - `supabase/migrations/202611060003_reduce_room_churn.sql`
-   - `supabase/migrations/202611060004_host_kick.sql`
+3. Em **Authentication → Sign In / Providers**, habilite cadastro por e-mail e **Confirm Email**. Desabilite **Allow anonymous sign-ins**.
+4. Aplique as migrations pendentes em ordem, até `202611120011_accounts.sql`. Consulte [o procedimento de implantação e inicialização](docs/ADMINISTRACAO.md).
 5. Em **Realtime Settings**, **desative Allow public access**. Todos os canais da aplicação usam `private: true`. Não desative RLS. As migrations criam políticas em `realtime.messages`, onde o Supabase já mantém RLS habilitada.
-6. Em Auth, configure a Site URL de produção. Se usar CAPTCHA, habilite **Cloudflare Turnstile** na proteção contra abuso do Supabase, configure o segredo apenas no painel Auth, e a site key pública em `VITE_TURNSTILE_SITE_KEY`.
+6. Em Auth, configure a Site URL de produção, o redirecionamento para `/recuperar` e o SMTP. Se usar CAPTCHA, habilite **Cloudflare Turnstile** na proteção contra abuso do Supabase, configure o segredo apenas no painel Auth, e a site key pública em `VITE_TURNSTILE_SITE_KEY`.
 7. No Turnstile, autorize o domínio de produção e o hostname local que você efetivamente usar. Não tente resolver desafios automaticamente.
-8. Configure limites de Auth e monitore abuso. A proteção por conta do banco não substitui a limitação por IP e o CAPTCHA da criação de identidades anônimas. Use um projeto separado para testes automatizados que exigirem CAPTCHA desativado.
+8. Configure limites de Auth e monitore abuso de cadastro e recuperação. Use um projeto separado para testes automatizados que exigirem CAPTCHA desativado.
 9. Habilite o Supabase Cron e execute `supabase/maintenance.sql` após aplicar as migrations. Uma sala vazia aceita entradas por dez segundos e depois desaparece do catálogo. Quando a saída não chega ao servidor, os dez segundos começam após a presença expirar por falta de heartbeat. O Cron remove os registros vencidos.
 
 Se preferir a CLI, com Supabase CLI instalada no computador de desenvolvimento:
@@ -61,9 +57,9 @@ A página inicial lista as salas ativas, os apelidos dos participantes e quem es
 
 Para publicar o catálogo, aplique a migration `202611120009_room_directory.sql` no Supabase antes de publicar o frontend. Ela usa `pgcrypto` no schema `extensions` para armazenar hashes de senha.
 
-1. Digite um apelido de 2 a 24 caracteres e clique em **Criar sala**.
+1. Entre com uma conta ativa e verificada. Se sua conta estiver autorizada, clique em **Criar sala**.
 2. Copie o convite na barra lateral e envie-o aos amigos por um canal de sua confiança.
-3. Cada amigo abre o link, escolhe um apelido e clica em **Entrar na sala**.
+3. Cada amigo abre o link, entra com sua conta verificada e clica em **Entrar na sala**.
 4. Um participante clica em **Compartilhar jogo** e escolhe a janela no diálogo nativo. Marque o áudio se o navegador oferecer essa opção.
 5. O espectador recebe a mídia automaticamente. Se o navegador bloquear autoplay, clique em **Reproduzir transmissão**.
 6. Use volume e tela cheia no espectador. No transmissor, volte para o jogo: não há prévia local consumindo renderização de vídeo.
@@ -141,21 +137,13 @@ npm run preview
 
 Os testes Vitest usam peers e streams simulados para verificar protocolo, concorrência lógica, ICE precoce, sessões antigas, até sete espectadores, liberação de recursos e emissão autenticada de TURN. Os testes SQL executam as migrations em PostgreSQL WASM (PGlite), com papéis `authenticated`/`anon`, RLS real e stubs **apenas** do contrato `auth.uid()`/tópico do Realtime. Não substituem Supabase Realtime gerenciado, rede real, captura ou encoder.
 
-Para validar Auth/RLS/Broadcast no Supabase real, use um projeto **de testes** com as migrations aplicadas, Auth anônimo e sem CAPTCHA:
-
-```powershell
-$env:STREAMLITE_TEST_SUPABASE_URL = 'https://SEU-PROJETO-DE-TESTES.supabase.co'
-$env:STREAMLITE_TEST_PUBLISHABLE_KEY = 'sb_publishable_SUBSTITUA'
-npm run test:integration
-```
-
-Esse teste cria três identidades anônimas de teste, verifica Broadcast privado e acesso de intruso, e remove as associações ao terminar. A sala expira em oito horas; as identidades anônimas permanecem até a limpeza configurada. Ele não testa vídeo/áudio e não deve ser executado contra produção com CAPTCHA desativado.
+Para validar Auth, RLS e Broadcast no Supabase real, configure três contas em um projeto de testes e execute `npm run test:integration`. Consulte [as variáveis e o procedimento de validação](docs/ADMINISTRACAO.md#validação).
 
 ## 8. Estrutura e arquivos principais
 
 ```text
 src/
-  App.tsx                  Alternância entre entrada e sala
+  App.tsx                  Sessão, acesso por perfil e rotas
   pages/                   Páginas inicial e de sala
   components/              Player, configurações, ícones, Turnstile, diagnóstico
   services/
@@ -200,14 +188,14 @@ Antes de promover o MVP a validado: execute [docs/VALIDACAO.md](docs/VALIDACAO.m
 
 Na criação, um slider permite escolher de **2 a 8 pessoas**, incluindo o criador, com padrão de duas e estimativas de impacto/upload. Aplique a migration `202611060007_room_capacity.sql` depois das anteriores. Salas existentes mantêm cinco vagas. Consulte [docs/CAPACIDADE.md](docs/CAPACIDADE.md) para configuração, estimativas e testes com oito participantes.
 
-Novas salas recebem automaticamente o nome `Sala de <apelido do criador>`. Aplique também a migration `202611060006_room_creator_name.sql` no SQL Editor depois das anteriores. O nome é salvo na criação e aparece tanto para os participantes quanto na administração; salas existentes mantêm seus nomes.
+Novas salas recebem automaticamente o nome `Sala de <nome de usuário do criador>`. O banco lê o nome do perfil e o salva na criação.
 
-O botão **Administração** no topo permite listar e finalizar salas com credenciais verificadas por uma Edge Function. A lista é carregada somente quando solicitada. A ativação exige a migration `202611060005_admin.sql`, os segredos administrativos e o deploy da função `admin-panel`: siga [docs/ADMINISTRACAO.md](docs/ADMINISTRACAO.md). Finalizar uma sala invalida seu convite e libera sua vaga na cota de três salas recentes ativas por usuário.
+O painel `/admin` usa a sessão Supabase Auth. Admins e SuperAdmins gerenciam contas e consultam o histórico conforme o cargo. SuperAdmins também podem listar e finalizar salas. Finalizar uma sala invalida seu convite e libera sua vaga na cota de três salas recentes ativas por usuário. [Procedimento de administração](docs/ADMINISTRACAO.md)
 
 ## Referências técnicas
 
 - [Supabase: autorização Realtime e cache de políticas](https://supabase.com/docs/guides/realtime/authorization)
-- [Supabase: identidades anônimas e proteção contra abuso](https://supabase.com/docs/guides/auth/auth-anonymous)
+- [Supabase: configuração de Auth](https://supabase.com/docs/guides/auth/general-configuration)
 - [Chrome 141: windowAudio](https://developer.chrome.com/release-notes/141)
 - [Chrome: controles do compartilhamento](https://developer.chrome.com/docs/web-platform/screen-sharing-controls)
 - [MDN: setCodecPreferences](https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpTransceiver/setCodecPreferences)

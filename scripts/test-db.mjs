@@ -13,13 +13,18 @@ const ok = (value, message) => {
 const ids = Array.from({ length: 10 }, () => randomUUID()),
   tabs = ids.map(() => randomUUID());
 await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth; create schema realtime;
- create table auth.users(id uuid primary key); grant usage on schema auth,realtime to authenticated;
+ create table auth.users(id uuid primary key,email text unique,email_confirmed_at timestamptz,
+   is_anonymous boolean not null default false,raw_user_meta_data jsonb,
+   created_at timestamptz not null default now(),last_sign_in_at timestamptz);
+ grant usage on schema auth,realtime to authenticated;
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  create function realtime.topic() returns text language sql stable as $$ select current_setting('realtime.topic',true) $$;
  create table realtime.test_events(payload jsonb,event text,topic text,private boolean);
  create function realtime.send(payload jsonb,event text,topic text,private boolean) returns void language sql as $$ insert into realtime.test_events values(payload,event,topic,private) $$;
  create table realtime.messages(extension text); alter table realtime.messages enable row level security; grant select,insert on realtime.messages to authenticated;`);
-for (const id of ids) await db.query("insert into auth.users values($1)", [id]);
+for (const [index, id] of ids.entries())
+  await db.query("insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())",
+    [id, index === 0 ? "ropolatto77@gmail.com" : `test${index}@example.test`]);
 await db.exec(
   await readFile(
     new URL("../supabase/migrations/202611050001_rooms.sql", import.meta.url),
@@ -505,6 +510,103 @@ try {
   ok(!(await rpc('list_rooms', [50, 0])).some(room => room.id === openRoom.room.id), 'prazo vencido oculta sala do catálogo');
   await admin('delete from public.rooms where vacancy_deadline<=statement_timestamp()');
   ok(await vacancy(openRoom.room.id) === undefined && Number(await vacancy(lockedRoom.room.id)) > 0, 'limpeza remove sala vencida e preserva sala ocupada');
+
+  await admin("update auth.users set is_anonymous=true,email=null,email_confirmed_at=null where id=$1", [ids[9]]);
+  await admin("update auth.users set last_sign_in_at=now() where id=$1", [ids[0]]);
+  await db.exec(await readFile(new URL("../supabase/migrations/202611120011_accounts.sql", import.meta.url), "utf8"));
+  await db.exec("set role anon");
+  await denied(() => rpc("list_rooms", [25, 0]), "visitante não acessa o catálogo");
+  await denied(() => rpc("join_room", [token, "Visitante", tabs[1]]), "visitante não entra por convite");
+  await as(9);
+  await denied(() => rpc("join_listed_room", [lockedRoom.room.id, "Legado", tabs[9], password]), "JWT anônimo legado não entra");
+  const newcomer = randomUUID();
+  const unverified = randomUUID();
+  await admin(`insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
+    values($1,'new@example.test',now(),'{"username":"Nova","role":"superadmin","can_create_rooms":true}'),
+          ($2,'pending@example.test',null,'{"username":"Pendente"}')`, [newcomer, unverified]);
+  ids.push(newcomer, unverified);
+  tabs.push(randomUUID(), randomUUID());
+  await denied(() => admin(`insert into auth.users(id,email,raw_user_meta_data)
+    values($1,'duplicate@example.test','{"username":"NOVA"}')`, [randomUUID()]), "nome de usuário único sem distinguir maiúsculas");
+  await denied(() => admin(`insert into auth.users(id,email,raw_user_meta_data)
+    values($1,'other@example.test','{"username":"Rod"}')`, [randomUUID()]), "nome Rod reservado no cadastro");
+  await as(11);
+  await denied(() => rpc("join_listed_room", [lockedRoom.room.id, "Pendente", tabs[11], password]), "e-mail pendente não entra em sala");
+  await as(10);
+  const self = (await db.query("select * from public.profiles")).rows;
+  ok(self.length === 1 && self[0].role === "user" && self[0].status === "active" &&
+    self[0].can_create_rooms === false, "perfil próprio e permissões padrão mesmo com metadados manipulados");
+  await denied(() => db.query("update public.profiles set role='superadmin'"), "perfil não permite escalada por UPDATE");
+  await denied(() => rpc("create_room", ["Falso", tabs[10]]), "RPC de criação antiga exige permissão");
+  await denied(() => rpc("create_listed_room", ["Falso", tabs[10], 5, "public", null]), "RPC de criação listada exige permissão");
+  await denied(() => db.query("insert into public.rooms(created_by) values($1)", [newcomer]), "tabela de salas rejeita criação direta");
+  await denied(() => rpc("staff_users", []), "usuário comum não lista usuários diretamente");
+  await denied(() => rpc("staff_update_user", [newcomer, "grant_rooms", 0]), "usuário comum não altera permissões");
+  await denied(() => rpc("bootstrap_streamlite_superadmin", [ids[0]]), "usuário comum não chama bootstrap");
+  await db.exec("reset role; set role service_role");
+  await denied(() => rpc("bootstrap_streamlite_superadmin", [newcomer]), "bootstrap exige UUID do e-mail definitivo");
+  await rpc("bootstrap_streamlite_superadmin", [ids[0]]);
+  await rpc("bootstrap_streamlite_superadmin", [ids[0]]);
+  await as(0);
+  const rod = (await rpc("staff_users", ["ropolatto", "active", "superadmin", 0]))[0];
+  ok(rod?.username === "Rod" && rod?.can_create_rooms && rod?.last_sign_in_at, "Rod acessa o painel com dados de último login");
+  ok((await rpc("staff_audit", [0])).filter(row => row.action === "bootstrap").length === 1, "bootstrap idempotente");
+  await denied(() => rpc("staff_update_user", [rod.id, "block", rod.version]), "SuperAdmin não modifica a própria permissão");
+  await denied(() => admin("update public.profiles set status='blocked' where id=$1", [rod.id]), "banco preserva último SuperAdmin ativo");
+  await denied(() => admin("delete from auth.users where id=$1", [rod.id]), "exclusão no Auth preserva último SuperAdmin ativo");
+  await as(0);
+  await rpc("staff_update_user", [ids[1], "promote", 0]);
+  await as(1);
+  await denied(() => rpc("staff_update_user", [rod.id, "block", rod.version]), "Admin não bloqueia SuperAdmin");
+  await denied(() => rpc("staff_update_user", [newcomer, "promote", 0]), "Admin não altera cargos");
+  await rpc("staff_update_user", [newcomer, "grant_rooms", 0]);
+  await denied(() => rpc("staff_update_user", [newcomer, "block", 0]), "versão obsoleta não sobrescreve outra alteração");
+  await as(10);
+  const protectedRoom = await rpc("create_listed_room", ["Nome forjado", tabs[10], 5, "private", password]);
+  ok(protectedRoom.room.created_by === newcomer && protectedRoom.room.name === "Sala de Nova", "sala usa UUID e nome do perfil");
+  const stream = await rpc("claim_stream", [protectedRoom.room.id, tabs[10]]);
+  await as(2);
+  ok(await rpc("update_own_username", ["Outro"]) === "Outro", "usuário ativo pode editar o próprio nome");
+  await denied(() => rpc("update_own_username", ["Rod"]), "edição do perfil não permite assumir o nome reservado");
+  await denied(() => rpc("update_own_username", ["NOVA"]), "edição do perfil mantém a unicidade");
+  ok((await rpc("join_listed_room", [protectedRoom.room.id, "Forjado", tabs[2], null])).error?.includes("Senha"), "senha de sala preservada");
+  const joined = await rpc("join_listed_room", [protectedRoom.room.id, "Forjado", tabs[2], password]);
+  ok(joined.streams[0]?.session_id === stream && joined.members.some(m => m.user_id === ids[2] && m.nickname === "Outro"), "contas ativas entram e encontram transmissões existentes");
+  await as(1);
+  await rpc("staff_update_user", [newcomer, "revoke_rooms", 1]);
+  await as(10);
+  await denied(() => rpc("create_room", ["Nova", tabs[10], 5]), "revogação impede criação na sessão já aberta");
+  ok((await rpc("room_pulse", [protectedRoom.room.id, tabs[10], stream])).streams.length === 1, "revogação preserva participação existente");
+  await as(1);
+  await rpc("staff_update_user", [newcomer, "block", 2]);
+  const audited = (await rpc("staff_audit", [0]))[0];
+  ok(audited.action === "block" && audited.previous_state.status === "active" &&
+    audited.new_state.status === "blocked", "bloqueio auditado com estados anterior e posterior");
+  await as(10);
+  await denied(() => rpc("room_pulse", [protectedRoom.room.id, tabs[10], stream]), "bloqueio invalida heartbeat na sessão já aberta");
+  await denied(() => rpc("join_listed_room", [protectedRoom.room.id, "Nova", tabs[10], password]), "bloqueio impede nova entrada");
+  ok(!(await rpc("authorize_turn", [protectedRoom.room.id])), "conta bloqueada não recebe credenciais TURN");
+  ok((await rpc("list_rooms", [25, 0])).length === 0 && (await db.query("select * from public.rooms")).rows.length === 0,
+    "bloqueio impede catálogo e leitura direta por RLS");
+  await db.query("select set_config('realtime.topic',$1,false)", [`room:${protectedRoom.room.id}:${joined.room.channel_epoch}:user:${newcomer}`]);
+  await denied(() => db.query("insert into realtime.messages values('broadcast')"), "conta bloqueada não obtém autorização de sinalização");
+  await as(2);
+  const afterBlock = await rpc("room_pulse", [protectedRoom.room.id, tabs[2], null]);
+  ok(!afterBlock.streams.length && !afterBlock.members.some(m => m.user_id === newcomer) &&
+    afterBlock.room.channel_epoch !== joined.room.channel_epoch, "bloqueio remove presença e transmissões e invalida o tópico");
+  await as(1);
+  await rpc("staff_update_user", [newcomer, "unblock", 3]);
+  await as(10);
+  ok((await rpc("join_listed_room", [protectedRoom.room.id, "Nova", tabs[10], password])).members.length === 2,
+    "desbloqueio recupera o acesso na mesma sessão");
+  await db.exec("reset role");
+  await db.exec(await readFile(new URL("../supabase/retire-temporary-admin.sql", import.meta.url), "utf8"));
+  await db.exec("set role service_role");
+  await denied(() => rpc("admin_login_gate", []), "login administrativo temporário removido");
+  await denied(() => rpc("admin_list_rooms", []), "credencial antiga não acessa RPC administrativa");
+  await as(0);
+  ok((await rpc("staff_rooms", [])).some(room => room.id === protectedRoom.room.id), "Rod mantém administração das salas após a transição");
+  ok(await rpc("staff_close_room", [protectedRoom.room.id]), "Rod consegue finalizar e auditar sala");
   console.log(
     `\n${checks} verificações SQL passaram em PostgreSQL WASM (PGlite). Realtime gerenciado exige teste separado.`,
   );

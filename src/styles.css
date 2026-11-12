@@ -17,11 +17,94 @@
   display: grid;
   gap: 8px;
 }
-.admin-entry{font-size:11px;white-space:nowrap}
-.admin-dialog{width:min(680px,calc(100% - 24px));max-height:85dvh;overflow:auto}
-.admin-dialog form{margin-top:22px}.admin-dialog form input{margin-bottom:16px}.admin-dialog form button{margin-top:8px}
-.admin-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:24px}.admin-toolbar strong{flex:1;font-size:13px}
-.admin-rooms article{display:flex;align-items:center;justify-content:space-between;gap:15px;border-top:1px solid var(--border);padding:16px 0}.admin-rooms article>div{min-width:0}.admin-rooms small{display:block;overflow-wrap:anywhere;color:#8b99aa;font-size:10px;margin-top:7px}.admin-rooms p{font-size:12px;margin:8px 0 0}.admin-rooms button{flex-shrink:0;font-size:11px;padding:9px}
+.account-shell {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 24px;
+  min-height: 100dvh;
+  padding: 24px 16px;
+}
+.account-card { width: min(100%, 440px); }
+.account-card h1 { font-size: 24px; margin: 0 0 20px; }
+.account-card .account-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-check input[type=checkbox] {
+  width: auto;
+  min-height: auto;
+  accent-color: var(--accent);
+}
+.account-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.account-card .account-actions { margin-top: 16px; }
+.account-actions a.secondary { text-decoration: none; }
+.account-profile { position: relative; }
+.account-profile summary { cursor: pointer; }
+.account-profile > div {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 3;
+  width: min(260px, 70vw);
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow-wrap: anywhere;
+}
+.account-profile input {
+  display: block;
+  width: 100%;
+  margin: 6px 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--inset);
+  color: inherit;
+}
+.admin-page main { width: min(100%, 1000px); margin: 0 auto; padding: 20px 16px 48px; }
+.admin-page [aria-pressed=true] { border-color: var(--accent); }
+.admin-filters {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0;
+}
+.admin-filters input, .admin-filters select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: inherit;
+  background: var(--inset);
+}
+.admin-list { list-style: none; display: grid; gap: 12px; padding: 0; }
+.admin-list li {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow-wrap: anywhere;
+}
+.admin-list h2 { font-size: 17px; margin: 0; }
+.admin-list p { margin: 5px 0; color: var(--muted); }
+.admin-list dl { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+.admin-list dt { font-size: 12px; color: var(--muted); }
+.admin-list dd { margin: 3px 0 0; }
+@media (max-width: 560px) {
+  .admin-filters { grid-template-columns: 1fr; }
+  .home-header:has(.account-actions), .room-header:has(.account-actions) { flex-wrap: wrap; }
+  .account-profile > div { right: auto; left: 0; }
+}
 :root {
   font-family: "Segoe UI", system-ui, sans-serif;
   color: #f2f3f5;
@@ -192,6 +275,62 @@ h2 {
   min-height: 60px;
   background: var(--sidebar);
   border-bottom: 1px solid var(--border);
+}
+.home-brand,
+.release-trigger {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.release-trigger {
+  justify-content: flex-start;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px;
+  font-size: 11px;
+}
+.release-label {
+  color: var(--accent-text);
+}
+.release-version {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.beta-stamp {
+  padding: 2px 6px;
+  border: 1px solid var(--accent-text);
+  border-radius: 4px;
+  color: var(--accent-text);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.sidebar-bottom .release-trigger {
+  margin: 0 12px 8px;
+}
+.release-dialog {
+  width: min(620px, calc(100% - 24px));
+}
+.release-dialog article > h3 {
+  margin: 14px 0 4px;
+}
+.release-dialog time {
+  font-size: 12px;
+  color: var(--muted);
+}
+.release-dialog h4 {
+  margin: 18px 0 6px;
+}
+.release-dialog ul {
+  margin: 0;
+  padding-inline-start: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.release-dialog li + li {
+  margin-top: 5px;
 }
 .header-tag {
   display: flex;

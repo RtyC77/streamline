@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({
   create: vi.fn(),
+  createAuth: vi.fn(),
   session: vi.fn(),
-  signIn: vi.fn(),
   rpc: vi.fn(),
 }));
-vi.mock("@supabase/supabase-js", () => ({ createClient: mock.create }));
+vi.mock("@supabase/supabase-js", () => ({ createClient: mock.create, AuthClient: mock.createAuth }));
 beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
@@ -13,8 +13,8 @@ beforeEach(() => {
   vi.stubEnv("VITE_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test");
   mock.create.mockImplementation(() => ({
     rpc: mock.rpc,
-    auth: { getSession: mock.session, signInAnonymously: mock.signIn },
   }));
+  mock.createAuth.mockImplementation(function () { return { getSession: mock.session }; });
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("Inicialização sob demanda", () => {
@@ -28,20 +28,22 @@ describe("Inicialização sob demanda", () => {
     expect(a).toBe(b);
     expect(mock.create).toHaveBeenCalledOnce();
   });
-  it("reutiliza a identidade existente sem criar outro usuário anônimo", async () => {
+  it("usa o token da sessão desta aba para as operações protegidas", async () => {
     mock.session.mockResolvedValue({
-      data: { session: { user: { id: "mesmo-usuario" } } },
+      data: { session: { access_token: "token-da-aba" } },
       error: null,
     });
-    const api = await import("../src/services/supabase");
-    expect(await api.authenticate()).toBe("mesmo-usuario");
-    expect(mock.signIn).not.toHaveBeenCalled();
+    const { prepareClient } = await import("../src/services/supabase");
+    await prepareClient();
+    const { accessToken } = mock.create.mock.calls[0][2];
+    await expect(accessToken()).resolves.toBe("token-da-aba");
+    mock.session.mockResolvedValue({ data: { session: null }, error: null });
+    await expect(accessToken()).resolves.toBeNull();
   });
-  it("carrega o catálogo antes de autenticar ou entrar em uma sala", async () => {
+  it("carrega o catálogo pela RPC protegida", async () => {
     mock.rpc.mockResolvedValue({ data: [], error: null });
     const { listRooms } = await import("../src/services/rooms");
     await expect(listRooms(0)).resolves.toEqual([]);
     expect(mock.rpc).toHaveBeenCalledWith("list_rooms", { p_limit: 26, p_offset: 0 });
-    expect(mock.signIn).not.toHaveBeenCalled();
   });
 });

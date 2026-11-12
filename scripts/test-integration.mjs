@@ -3,9 +3,13 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 const url = process.env.STREAMLITE_TEST_SUPABASE_URL,
   key = process.env.STREAMLITE_TEST_PUBLISHABLE_KEY;
-if (!url || !key) {
+const accounts = ["HOST", "GUEST", "OUTSIDER"].map((role) => ({
+  email: process.env[`STREAMLITE_TEST_${role}_EMAIL`],
+  password: process.env[`STREAMLITE_TEST_${role}_PASSWORD`],
+}));
+if (!url || !key || accounts.some(({ email, password }) => !email || !password)) {
   console.error(
-    "Configure STREAMLITE_TEST_SUPABASE_URL e STREAMLITE_TEST_PUBLISHABLE_KEY para um projeto de testes.",
+    "Configure a URL, a chave pública e as três contas de teste conforme docs/ADMINISTRACAO.md.",
   );
   process.exit(1);
 }
@@ -51,14 +55,18 @@ async function subscribe(channel, expectDenied = false) {
 }
 try {
   const ids = [];
-  for (const client of clients) {
-    const { data, error } = await client.auth.signInAnonymously();
-    if (error || !data.user)
-      throw new Error(
-        "Auth anônimo falhou. Use um projeto de testes com CAPTCHA desativado.",
-      );
+  const anonymous = await clients[2].rpc("list_rooms");
+  assert.ok(anonymous.error, "Visitante não pode listar salas.");
+  for (const [index, client] of clients.entries()) {
+    const { data, error } = await client.auth.signInWithPassword(accounts[index]);
+    if (error || !data.user?.email_confirmed_at || data.user.is_anonymous)
+      throw new Error("Login falhou. Use contas verificadas em um projeto de testes com CAPTCHA desativado.");
     ids.push(data.user.id);
   }
+  assert.equal(new Set(ids).size, 3);
+  const restricted = await clients[1].rpc("create_room", { p_nickname: "Teste", p_client: tabs[1] });
+  assert.equal(restricted.error?.code, "42501", "Participante não pode criar salas sem permissão.");
+  assert.equal((await clients[1].rpc("staff_users")).error?.code, "42501", "Participante não pode consultar usuários.");
   const created = await rpc(0, "create_room", {
     p_nickname: "Teste A",
     p_client: tabs[0],

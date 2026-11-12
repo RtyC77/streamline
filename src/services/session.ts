@@ -235,12 +235,13 @@ export class RoomSession {
       if (this.closed) return;
       const message =
         e && typeof e === "object" && "message" in e ? String(e.message) : "";
-      if (/Sua participação expirou|A sala expirou/.test(message)) {
+      if (/Sua participação expirou|A sala expirou|Conta bloqueada ou e-mail não confirmado/.test(message)) {
         void this.close()
           .catch(() => undefined)
           .finally(() =>
             this.callbacks.expired?.(
-              "Sua participação foi encerrada pelo host ou expirou. Entre novamente pelo convite se desejar voltar.",
+              message.startsWith("Conta bloqueada") ? message :
+                "Sua participação foi encerrada pelo host ou expirou. Entre novamente pelo convite se desejar voltar.",
             ),
           );
         return;

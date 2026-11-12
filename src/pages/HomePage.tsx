@@ -1,23 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Brand, Icon } from "../components/Icon";
-import { Turnstile } from "../components/Turnstile";
 import { configured } from "../config";
-import { authenticate } from "../services/supabase";
+import { CREATE_ROOM_DENIED, updateOwnUsername, type Profile } from "../services/accounts";
 import { createListedRoom, enter, inviteLink, isRoomId, joinListedRoom, listRooms, parseRoomLink, type ListedRoom } from "../services/rooms";
 import { explain } from "../services/errors";
 import type { Entry } from "../types";
-import {AdminEntry} from '../components/AdminEntry';
 import {RoomCapacity,DEFAULT_CAPACITY} from '../components/RoomCapacity';
+import { ReleaseInfo } from "../components/ReleaseInfo";
 export function HomePage({
   onEnter,
   message,
+  profile,
+  email,
+  accountActions,
 }: {
-  onEnter: (entry: Entry, self: string, invite: string) => void;
+  onEnter: (entry: Entry, invite: string) => void;
   message?: string;
+  profile: Profile;
+  email?: string;
+  accountActions: ReactNode;
 }) {
-  const [nickname, setNickname] = useState(
-    () => localStorage.getItem("streamlite-nickname") ?? "",
-  );
+  const nickname = profile.username;
   const [invite, setInvite] = useState(
     () => new URLSearchParams(location.hash.slice(1)).get("convite") ?? "",
   );
@@ -25,16 +28,17 @@ export function HomePage({
     const id = new URLSearchParams(location.hash.slice(1)).get("sala");
     return id && isRoomId(id) ? { id } : null;
   });
-  const [joining, setJoining] = useState(() => Boolean(target || invite));
+  const [joinSelected, setJoining] = useState(() => Boolean(target || invite));
+  const joining = joinSelected || !profile.can_create_rooms;
   const [access, setAccess] = useState<"public" | "private">("public");
   const [password, setPassword] = useState("");
   const [rooms, setRooms] = useState<ListedRoom[] | null>(null);
   const [directoryError, setDirectoryError] = useState("");
   const [page, setPage] = useState(0);
-  const nicknameInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
+  const [profileMessage, setProfileMessage] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [captcha, setCaptcha] = useState("");
   const [capacity, setCapacity] = useState(DEFAULT_CAPACITY);
   useEffect(() => {
     if (!configured) return;
@@ -66,26 +70,22 @@ export function HomePage({
     setTarget(room.access_mode === "invite" ? null : {
       id: room.id, name: room.name, private: room.access_mode === "private",
     });
-    nicknameInput.current?.focus();
   };
   const enterRoom = async (join: boolean) => {
     if (busy) return;
     setBusy(true);
     setError("");
     try {
-      if (nickname.trim().length < 2)
-        throw new Error("Escolha um apelido de 2 a 24 caracteres.");
+      if (!join && !profile.can_create_rooms) throw new Error(CREATE_ROOM_DENIED);
       const destination = join ? target?.id ?? parseRoomLink(invite) : null;
-      const id = await authenticate(captcha);
       const data = destination
         ? isRoomId(destination)
           ? await joinListedRoom(destination, nickname, password)
           : await enter(nickname, destination)
         : await createListedRoom(nickname, capacity, access, password);
-      localStorage.setItem("streamlite-nickname", nickname.trim());
       const normalized = destination ?? data.room.id;
       history.replaceState(null, "", inviteLink(normalized));
-      onEnter(data, id, normalized);
+      onEnter(data, normalized);
     } catch (e) {
       setError(explain(e));
     } finally {
@@ -95,13 +95,45 @@ export function HomePage({
   return (
     <div className="home">
       <header className="home-header">
-        <Brand />
-        <AdminEntry/>
+        <div className="home-brand">
+          <Brand />
+          <ReleaseInfo />
+        </div>
+        <div className="account-actions">
+          <details className="account-profile">
+            <summary>Perfil de {nickname}</summary>
+            <div>
+              <p>{email}</p>
+              {nickname.toLowerCase() !== "rod" && <form onSubmit={async (event) => {
+                event.preventDefault();
+                if (savingProfile) return;
+                const name = String(new FormData(event.currentTarget).get("username") ?? "");
+                setSavingProfile(true);
+                setProfileMessage("");
+                try {
+                  const saved = await updateOwnUsername(name);
+                  setProfileMessage(`Nome salvo como ${saved}.`);
+                } catch (cause) {
+                  setProfileMessage(explain(cause));
+                } finally {
+                  setSavingProfile(false);
+                }
+              }}>
+                <label htmlFor="profile-username">Nome de usuário</label>
+                <input key={nickname} id="profile-username" name="username" defaultValue={nickname}
+                  pattern={String.raw`[A-Za-z0-9_.\-]{2,24}`} required maxLength={24} disabled={savingProfile} />
+                <button className="secondary" disabled={savingProfile}>Salvar</button>
+              </form>}
+              {profileMessage && <p role="status">{profileMessage}</p>}
+            </div>
+          </details>
+          {accountActions}
+        </div>
       </header>
       <main className="home-main">
         <section className="entry-card" aria-label="Criar ou entrar em uma sala">
           <nav className="entry-nav" aria-label="Opções da sala">
-            <button type="button" aria-pressed={!joining} disabled={busy} onClick={() => changeMode(false)}><Icon name="plus" size={19} /> Criar sala</button>
+            <button type="button" aria-pressed={!joining} disabled={busy || !profile.can_create_rooms} onClick={() => changeMode(false)}><Icon name="plus" size={19} /> Criar sala</button>
             <button type="button" aria-pressed={joining} disabled={busy} onClick={() => changeMode(true)}><Icon name="link" size={19} /> Entrar na sala</button>
           </nav>
           <form
@@ -110,19 +142,7 @@ export function HomePage({
               if (configured && (!joining || target || invite.trim())) void enterRoom(joining);
             }}
           >
-            <label htmlFor="nickname">Como podemos te chamar?</label>
-            <input
-              id="nickname"
-              ref={nicknameInput}
-              autoComplete="nickname"
-              placeholder="Seu apelido"
-              minLength={2}
-              maxLength={24}
-              required
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              disabled={busy}
-            />
+            {!profile.can_create_rooms && <p className="notice">{CREATE_ROOM_DENIED}</p>}
             {joining && target ? (
               <div className="selected-room">
                 <strong>{target.name ?? "Sala do link"}</strong>
@@ -174,10 +194,6 @@ export function HomePage({
               {busy ? "Conectando…" : joining ? "Entrar na sala" : "Criar sala"}
               <Icon name="arrow" size={18} />
             </button>
-            <Turnstile
-              onToken={setCaptcha}
-              onError={setError}
-            />
           </form>
           {!configured && (
             <div className="notice">
