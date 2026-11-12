@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, lazy, Suspense } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Brand } from "./components/Icon";
+import { Brand, Icon } from "./components/Icon";
 import { AuthPage } from "./pages/AuthPage";
 import { HomePage } from "./pages/HomePage";
 import { loadProfile, type Profile } from "./services/accounts";
@@ -151,7 +151,11 @@ function Rooms({ profile, email, logout }: { profile: Profile; email?: string; l
     setRoom(null);
     if (!reason) history.replaceState(null, "", "/");
   }, []);
-  const adminLink = profile.role !== "user" && <a className="secondary" href="/admin">Administração</a>;
+  const adminLink = profile.role !== "user" && (
+    <a className="account-control account-control--admin" href="/admin">
+      <Icon name="lock" size={16} /> Administração
+    </a>
+  );
   return room ? (
     <Suspense fallback={<p role="status">Abrindo sala…</p>}>
       <RoomPage initial={room.entry} self={profile.id} invite={room.invite} onLeave={leave}
@@ -159,7 +163,12 @@ function Rooms({ profile, email, logout }: { profile: Profile; email?: string; l
     </Suspense>
   ) : (
     <HomePage profile={profile} email={email} message={message}
-      accountActions={<>{adminLink}<button className="secondary" onClick={logout}>Sair da conta</button></>}
+      accountActions={<>
+        {adminLink}
+        <button type="button" className="account-control account-control--exit" onClick={logout}>
+          <Icon name="exit" size={16} /> Sair da conta
+        </button>
+      </>}
       onEnter={(entry, invite) => {
         setMessage("");
         setRoom({ entry, invite });

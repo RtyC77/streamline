@@ -363,10 +363,10 @@ export function RoomPage({
           </button>
           {(accountActions || onLogout) && <div className="account-actions">
             {accountActions}
-            {onLogout && <button className="secondary" onClick={() => {
+            {onLogout && <button type="button" className="account-control account-control--exit" onClick={() => {
               void (session.current?.close(true) ?? Promise.resolve()).catch(() => undefined)
                 .finally(() => { onLeave(); onLogout(); });
-            }}>Sair da conta</button>}
+            }}><Icon name="exit" size={16} /> Sair da conta</button>}
           </div>}
           <span className="p2p-badge">
             <span className="status-dot" />

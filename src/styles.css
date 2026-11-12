@@ -45,8 +45,53 @@
 }
 .account-card .account-actions { margin-top: 16px; }
 .account-actions a.secondary { text-decoration: none; }
+.account-actions .account-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+.account-control svg { flex: none; }
+.account-actions .account-control:hover,
+.account-profile[open] > .account-control {
+  border-color: var(--accent);
+  background: var(--inset);
+}
+.account-control:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+.account-actions .account-control--admin { color: var(--accent-text); }
+.account-actions .account-control--exit {
+  background: transparent;
+  color: var(--muted);
+}
+.account-actions .account-control--exit:hover {
+  color: #ffc0c4;
+  border-color: #a65f66;
+  background: var(--inset);
+}
 .account-profile { position: relative; }
-.account-profile summary { cursor: pointer; }
+.account-profile summary { list-style: none; }
+.account-profile summary::-webkit-details-marker { display: none; }
+.account-profile-name {
+  max-width: min(170px, 47vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.account-profile[open] summary svg:last-child { transform: rotate(180deg); }
 .account-profile > div {
   position: absolute;
   right: 0;
@@ -104,6 +149,7 @@
   .admin-filters { grid-template-columns: 1fr; }
   .home-header:has(.account-actions), .room-header:has(.account-actions) { flex-wrap: wrap; }
   .account-profile > div { right: auto; left: 0; }
+  .account-actions .account-control { min-height: 44px; }
 }
 :root {
   font-family: "Segoe UI", system-ui, sans-serif;

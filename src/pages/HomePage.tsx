@@ -101,7 +101,11 @@ export function HomePage({
         </div>
         <div className="account-actions">
           <details className="account-profile">
-            <summary>Perfil de {nickname}</summary>
+            <summary className="account-control">
+              <Icon name="user" size={16} />
+              <span className="account-profile-name">Perfil de {nickname}</span>
+              <Icon name="chevronDown" size={14} />
+            </summary>
             <div>
               <p>{email}</p>
               {nickname.toLowerCase() !== "rod" && <form onSubmit={async (event) => {
