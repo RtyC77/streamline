@@ -586,23 +586,6 @@ h2 {
   flex: none;
   color: var(--accent);
 }
-.empty-seat {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  font-size: 10px;
-  color: #8995a8;
-  margin-top: 14px;
-}
-.empty-seat > span {
-  display: grid;
-  place-items: center;
-  border: 1px dashed #35404e;
-  width: 35px;
-  height: 35px;
-  border-radius: 10px;
-  font-size: 18px;
-}
 .sidebar-bottom {
   border-top: 1px solid #2b303b;
 }
@@ -1063,9 +1046,6 @@ dialog > .muted {
   .participants li:has(.camera-avatar, .camera-message) {
     min-width: 0;
     flex: 1 1 100%;
-  }
-  .participants .empty-seat {
-    display: none;
   }
   .room-header h1 {
     font-size: 19px;

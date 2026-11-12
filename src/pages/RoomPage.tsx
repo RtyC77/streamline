@@ -262,11 +262,6 @@ export function RoomPage({
               </li>
             ))}
           </ul>
-          {snapshot.members.length < capacity && (
-            <div className="empty-seat">
-              <span>+</span>Tem lugar para mais {capacity - snapshot.members.length}
-            </div>
-          )}
         </div>
         <div className="sidebar-bottom">
           <span className="connection-label">
