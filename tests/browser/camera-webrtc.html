@@ -113,8 +113,8 @@
       const enlarged = avatar();
       assert(original.width > 0 && enlarged.width === original.width * 2 && enlarged.height === original.height * 2,
         "A prévia não tem o dobro do tamanho do avatar");
-      assert(card().textContent.includes("Origem você host") && card().textContent.includes("Na sala"),
-        "Identificação ou status ausente");
+      assert(card().querySelector("strong")?.textContent === "Origem",
+        "Nome ausente ou acompanhado de rótulos na lista de participantes");
       assert(control().textContent === "Desativar câmera", "Controle de desligamento ausente");
       control().click();
       await wait(() => !card().querySelector("video") && avatar().width === original.width, "Avatar original não restaurado");

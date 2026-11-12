@@ -237,26 +237,16 @@ export function RoomPage({
                 <span className={`avatar avatar-${i % 4}${cameras[m.user_id]?.stream ? " camera-avatar" : ""}`}>
                   {cameras[m.user_id]?.stream
                     ? <CameraPreview stream={cameras[m.user_id].stream!} name={m.nickname} />
-                    : m.nickname.slice(0, 2).toUpperCase()}
-                  <i />
+                    : <span aria-hidden="true">{m.nickname.slice(0, 2).toUpperCase()}</span>}
                 </span>
                 <div>
-                  <strong>
-                    {m.nickname}
-                    {m.user_id === self && <small> você</small>}
-                    {m.user_id === snapshot.room.created_by && (
-                      <small> host</small>
-                    )}
-                  </strong>
-                  <span>
-                    {streams.some(s=>s.broadcaster_id===m.user_id)
-                      ? "Transmitindo agora"
-                      : "Na sala"}
-                  </span>
+                  <strong title={m.nickname}>{m.nickname}</strong>
                   {cameras[m.user_id]?.message && <span className="camera-message">{cameras[m.user_id].message}</span>}
                 </div>
                 {streams.some(s=>s.broadcaster_id===m.user_id) && (
-                  <Icon name="screen" size={17} />
+                  <span className="participant-sharing" role="img" aria-label="Compartilhando tela" title="Compartilhando tela">
+                    <Icon name="screen" size={15} />
+                  </span>
                 )}
                 {snapshot.room.created_by === self && m.user_id !== self && (
                   <button

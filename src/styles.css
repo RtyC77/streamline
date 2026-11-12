@@ -501,19 +501,22 @@ h2 {
   list-style: none;
 }
 .participants li {
-  --participant-avatar-size: 35px;
+  --participant-avatar-size: 26px;
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 11px 0;
+  gap: 8px;
+  padding: 4px 0;
 }
 .participants .avatar {
   width: var(--participant-avatar-size);
   height: var(--participant-avatar-size);
+  border-radius: 50%;
+  font-size: 9px;
 }
 .participants .camera-avatar {
   width: calc(var(--participant-avatar-size) * 2);
   height: calc(var(--participant-avatar-size) * 2);
+  border-radius: 8px;
 }
 .camera-avatar video {
   width: 100%;
@@ -560,16 +563,6 @@ h2 {
   background: #2b3d4e;
   color: #b9d9f7;
 }
-.avatar i {
-  position: absolute;
-  bottom: -1px;
-  right: -2px;
-  width: 9px;
-  height: 9px;
-  border: 2px solid #15181f;
-  border-radius: 50%;
-  background: var(--accent);
-}
 .participants li > div {
   display: flex;
   flex-direction: column;
@@ -579,17 +572,18 @@ h2 {
 }
 .participants strong {
   font-size: 12px;
-  overflow-wrap: anywhere;
-}
-.participants strong small {
-  font-weight: 400;
-  color: #8995a8;
+  font-weight: 500;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .participants li > div > span {
   font-size: 10px;
   color: #9aab97;
 }
-.participants li > svg {
+.participant-sharing {
+  display: inline-flex;
+  flex: none;
   color: var(--accent);
 }
 .empty-seat {
@@ -1063,11 +1057,8 @@ dialog > .muted {
     padding-top: 10px;
   }
   .participants li {
-    --participant-avatar-size: 29px;
-    padding: 5px 10px 5px 0;
-  }
-  .participants li:not(:has(.camera-avatar)) > div > span:not(.camera-message) {
-    display: none;
+    max-width: 100%;
+    padding-right: 6px;
   }
   .participants li:has(.camera-avatar, .camera-message) {
     min-width: 0;
@@ -1075,9 +1066,6 @@ dialog > .muted {
   }
   .participants .empty-seat {
     display: none;
-  }
-  .participants .avatar {
-    font-size: 9px;
   }
   .room-header h1 {
     font-size: 19px;
