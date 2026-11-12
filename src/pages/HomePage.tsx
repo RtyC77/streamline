@@ -21,6 +21,7 @@ export function HomePage({
   const [invite, setInvite] = useState(
     () => new URLSearchParams(location.hash.slice(1)).get("convite") ?? "",
   );
+  const [joining, setJoining] = useState(() => Boolean(invite));
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [captcha, setCaptcha] = useState("");
@@ -55,48 +56,6 @@ export function HomePage({
         <AdminEntry/>
       </header>
       <main className="home-main">
-        <div className="hero">
-          <div className="eyebrow">
-            <span /> UM BOM JOGO FICA MELHOR JUNTO
-          </div>
-          <h1>
-            Seu jogo na tela.{" "}
-            <br />
-            Seus amigos{" "}
-            <br />
-            <span>por perto.</span>
-          </h1>
-          <div className="feature-row">
-            <span>
-              <Icon name="lock" size={17} />
-              Só por convite
-            </span>
-            <span>
-              <Icon name="users" size={17} />
-              De 2 a 8 pessoas
-            </span>
-            <span>
-              <Icon name="screen" size={17} />
-              Sem instalar nada
-            </span>
-          </div>
-          <div
-            className="signal-art"
-            aria-label="Vídeo enviado diretamente do seu navegador aos seus amigos"
-          >
-            <div className="art-host">
-              <Icon name="screen" size={28} />
-              <span>Seu jogo</span>
-            </div>
-            <div className="art-line" />
-            <div className="art-friends">
-              {["A", "B", "C", "D"].map((x) => (
-                <span key={x}>{x}</span>
-              ))}
-            </div>
-            <small>Conexão direta. Momentos compartilhados.</small>
-          </div>
-        </div>
         <section className="entry-card" aria-label="Criar ou entrar em uma sala">
           <div className="card-top">
             <span className="card-symbol">
@@ -104,10 +63,14 @@ export function HomePage({
             </span>
             <span className="mini-tag">SALA PRIVADA</span>
           </div>
+          <nav className="entry-nav" aria-label="Opções da sala">
+            <button type="button" className="secondary" aria-pressed={!joining} disabled={busy} onClick={() => { setJoining(false); setError(""); }}>Criar sala</button>
+            <button type="button" className="secondary" aria-pressed={joining} disabled={busy} onClick={() => { setJoining(true); setError(""); }}>Entrar na sala</button>
+          </nav>
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void enterRoom(!!invite);
+              if (configured && (!joining || invite.trim())) void enterRoom(joining);
             }}
           >
             <label htmlFor="nickname">Como podemos te chamar?</label>
@@ -122,40 +85,28 @@ export function HomePage({
               onChange={(e) => setNickname(e.target.value)}
               disabled={busy}
             />
-            <RoomCapacity value={capacity} onChange={setCapacity} disabled={busy}/>
-            <button
-              className="primary wide"
-              type="button"
-              disabled={busy || !configured}
-              onClick={() => void enterRoom(false)}
-            >
-              <Icon name="plus" />
-              {busy ? "Conectando…" : "Criar sala"}
-              <Icon name="arrow" size={18} />
-            </button>
-            <div className="divider">
-              <span />
-              ou entre em uma sala
-              <span />
-            </div>
-            <label htmlFor="invite">Recebeu um convite?</label>
-            <div className="input-icon">
-              <Icon name="link" size={18} />
-              <input
-                id="invite"
-                placeholder="Cole o link ou código de convite"
-                autoComplete="off"
-                value={invite}
-                onChange={(e) => setInvite(e.target.value)}
-                disabled={busy}
-              />
-            </div>
-            <button
-              className="secondary wide"
-              type="submit"
-              disabled={busy || !invite || !configured}
-            >
-              Entrar na sala
+            {joining ? (
+              <>
+                <label htmlFor="invite">Recebeu um convite?</label>
+                <div className="input-icon">
+                  <Icon name="link" size={18} />
+                  <input
+                    id="invite"
+                    required
+                    placeholder="Cole o link ou código de convite"
+                    autoComplete="off"
+                    value={invite}
+                    onChange={(e) => setInvite(e.target.value)}
+                    disabled={busy}
+                  />
+                </div>
+              </>
+            ) : (
+              <RoomCapacity value={capacity} onChange={setCapacity} disabled={busy} />
+            )}
+            <button className="primary wide" type="submit" disabled={busy || !configured || (joining && !invite.trim())}>
+              {!joining && <Icon name="plus" />}
+              {busy ? "Conectando…" : joining ? "Entrar na sala" : "Criar sala"}
               <Icon name="arrow" size={18} />
             </button>
             <Turnstile
