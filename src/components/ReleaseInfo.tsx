@@ -30,8 +30,16 @@ const releases = [
         ],
       },
       {
+        title: "Conta e administração",
+        changes: [
+          "Cadastro com confirmação de e-mail, recuperação de senha e opção de permanecer conectado.",
+          "Painel administrativo com pesquisa de usuários, gestão de permissões e histórico de alterações.",
+        ],
+      },
+      {
         title: "Interface",
         changes: [
+          "Botões de Perfil, Administração e Sair da conta com altura uniforme, ícones e foco visível pelo teclado.",
           "Visual renovado, com ajustes na área de compartilhamento e adaptação a diferentes tamanhos de tela.",
           "Grade de telas compartilhadas, visualização expandida com botão Voltar e avisos de conexão na sala.",
           "Lista de participantes mais compacta, com prévias e nomes mais próximos e remoção do aviso de vagas.",
