@@ -25,7 +25,7 @@ export function HomePage({
     const id = new URLSearchParams(location.hash.slice(1)).get("sala");
     return id && isRoomId(id) ? { id } : null;
   });
-  const [joining, setJoining] = useState(() => Boolean(invite || target));
+  const [joining, setJoining] = useState(false);
   const [access, setAccess] = useState<"public" | "private">("public");
   const [password, setPassword] = useState("");
   const [rooms, setRooms] = useState<ListedRoom[] | null>(null);

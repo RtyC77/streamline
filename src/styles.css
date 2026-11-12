@@ -855,10 +855,10 @@ h2 {
   gap: 8px;
 }
 .leave-button {
-  background: transparent;
-  color: #c5989b;
+  background: #c52d3a;
+  color: var(--accent-ink);
   font-size: 11px;
-  padding: 10px;
+  padding: 11px 14px;
 }
 .room-footnote {
   display: flex;
