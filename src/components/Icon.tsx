@@ -4,6 +4,7 @@ const paths = {
   screen: "M4 4h16v12H4z M8 21h8 M12 16v5",
   plus: "M12 5v14 M5 12h14",
   arrow: "M5 12h14 M13 6l6 6-6 6",
+  chevronDown: "m6 9 6 6 6-6",
   link: "m10 13 4-4 M8 15l-2 2a3 3 0 0 1-4-4l5-5a3 3 0 0 1 4 0 M16 9l2-2a3 3 0 0 1 4 4l-5 5a3 3 0 0 1-4 0",
   copy: "M9 9h12v12H9z M15 5V3H3v12h2",
   users:

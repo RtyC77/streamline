@@ -13,6 +13,10 @@
   color: #ff8b92;
   font-weight: 700;
 }
+.share-option-actions {
+  display: grid;
+  gap: 8px;
+}
 .admin-entry{font-size:11px;white-space:nowrap}
 .admin-dialog{width:min(680px,calc(100% - 24px));max-height:85dvh;overflow:auto}
 .admin-dialog form{margin-top:22px}.admin-dialog form input{margin-bottom:16px}.admin-dialog form button{margin-top:8px}
@@ -833,6 +837,39 @@ h2 {
 .main-actions > button {
   font-size: 11px;
   padding: 11px 14px;
+}
+.broadcast-actions {
+  position: relative;
+  display: inline-flex;
+}
+.broadcast-stop {
+  padding: 11px 14px;
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+.broadcast-menu-toggle {
+  padding: 0 10px;
+  border-inline-start: 0;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+}
+.broadcast-stop,
+.broadcast-menu-toggle,
+.broadcast-menu button {
+  font-size: 11px;
+}
+.broadcast-actions > button:focus-visible {
+  z-index: 1;
+}
+.broadcast-menu {
+  position: absolute;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 5;
+}
+.broadcast-menu button {
+  white-space: nowrap;
+  box-shadow: 0 6px 16px #0006;
 }
 .volume {
   display: flex;

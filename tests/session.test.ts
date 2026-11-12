@@ -55,6 +55,7 @@ vi.mock("../src/media/peers", () => ({
     async sample() {}
     departed() {}
     setLocal = mocks.setLocal;
+    ownsTrack = () => true;
     stopLocal = mocks.stopLocal;
     dispose = mocks.disposed;
   },

@@ -1,6 +1,6 @@
 import type {MediaState,PeerMetric,Signal,SignalBody,Snapshot,SwitchTiming} from '../types';
 import {activeStreams} from '../types';
-import {preferCodecs,tuneSender} from './capture';
+import {applyCaptureQuality,preferCodecs,tuneSender} from './capture';
 import {defaultProfile,videoProfile,type CaptureProfile} from './profile';
 import {validStill} from './still';
 import {collectStats,type Counter} from './stats';
@@ -11,11 +11,14 @@ interface Peer {
  created:number; retries:number; restartAt:number; bitrate:number; negotiating:boolean; data:RTCDataChannel|null;
  timing:SwitchTiming;
  economy:boolean; tuning:Promise<void>;
+ videoSender?: RTCRtpSender;
+ audioSender?: RTCRtpSender;
 }
 export class Peers {
  private peers=new Map<string,Peer>();
  private snapshot:Snapshot|null=null;
  private stream:MediaStream|null=null;
+ private sourceChange: Promise<void> | null = null;
  private localSession:string|null=null;
  private selected:string|null=null;
  private remote:MediaStream|null=null;
@@ -147,6 +150,60 @@ export class Peers {
   if(poster){this.previews.add(session);this.preview(session,poster);}
   this.balanceTracks();this.emit();
  }
+ ownsTrack(track: MediaStreamTrack) {
+  return this.stream?.getVideoTracks()[0] === track;
+ }
+ async changeQuality(profile: CaptureProfile) {
+  const video = this.stream?.getVideoTracks()[0];
+  if (!video) throw new Error('A transmissão foi encerrada.');
+  await applyCaptureQuality(video, profile);
+  if (!this.ownsTrack(video) || video.readyState !== 'live') throw new Error('A transmissão foi encerrada.');
+  await this.updateProfile(profile);
+  return video.getSettings();
+ }
+ private async updateProfile(profile: CaptureProfile) {
+  this.profile = profile;
+  await Promise.all([...this.peers.values()].filter(p => p.outgoing && !p.preview).map(p => {
+   p.bitrate = this.bitrateLimits(p).bitrate;
+   return this.tunePeer(p);
+  }));
+ }
+ async replaceLocal(stream: MediaStream, audio: string, profile: CaptureProfile, poster: string | null) {
+  const previous = this.stream;
+  const video = stream.getVideoTracks()[0];
+  if (!previous || !video || this.sourceChange) throw new Error('A transmissão não está disponível para troca.');
+  const operation = this.replaceLocalTracks(previous, stream, video, audio, profile, poster);
+  this.sourceChange = operation;
+  try { await operation; }
+  finally { this.sourceChange = null; }
+ }
+ private async replaceLocalTracks(previous: MediaStream, stream: MediaStream, video: MediaStreamTrack, audio: string, profile: CaptureProfile, poster: string | null) {
+  const changed: Array<{peer: Peer; sender: RTCRtpSender; track: MediaStreamTrack | null}> = [];
+  try {
+   for (const peer of [...this.peers.values()]) {
+    if (!peer.outgoing || peer.preview || !this.current(peer)) continue;
+    for (const [sender, next] of [[peer.videoSender, video], [peer.audioSender, stream.getAudioTracks()[0] ?? null]] as const) {
+     if (!sender || !this.current(peer)) continue;
+     const track = sender.track;
+     try { await sender.replaceTrack(next); }
+     catch (error) { if (this.current(peer)) throw error; else break; }
+     changed.push({peer, sender, track});
+    }
+   }
+   if (this.stream !== previous || video.readyState !== 'live') throw new Error('A captura foi encerrada durante a troca.');
+  } catch (error) {
+   await Promise.allSettled(changed.filter(({peer}) => this.current(peer)).map(({sender, track}) => sender.replaceTrack(track)));
+   throw error;
+  }
+  this.stream = stream;
+  this.audio = audio;
+  this.poster = poster;
+  if (poster && this.localSession) this.preview(this.localSession, poster);
+  this.balanceTracks();
+  previous.getTracks().forEach(track => track.stop());
+  this.emit();
+  await this.updateProfile(profile);
+ }
  stopLocal(){
   this.stream?.getTracks().forEach(t=>t.stop());this.stream=null;this.localSession=null;this.poster=null;this.audio='Sem trilha';
   for(const [key,p]of this.peers)if(p.outgoing)this.close(key);this.emit();
@@ -174,7 +231,15 @@ export class Peers {
   pc.ontrack=e=>{
    if(outgoing||preview||session!==this.selected||this.peers.get(key)!==p)return;
    this.remote??=new MediaStream();if(!this.remote.getTracks().some(t=>t.id===e.track.id))this.remote.addTrack(e.track);
-   this.remoteAudio=this.remote.getAudioTracks().length?'Trilha de áudio recebida':'Sem trilha de áudio';this.emit();
+   const updateAudio=()=>{
+    if(!this.current(p)||session!==this.selected)return;
+    this.remoteAudio=this.remote?.getAudioTracks().some(track=>!track.muted)?'Trilha de áudio recebida':'Sem trilha de áudio';this.emit();
+   };
+   if(e.track.kind==='audio'){
+    e.track.addEventListener('mute',updateAudio);
+    e.track.addEventListener('unmute',updateAudio);
+   }
+   updateAudio();
   };
   pc.onconnectionstatechange=()=>{
    if(!this.current(p))return;
@@ -199,7 +264,11 @@ export class Peers {
     try{dc.send('ack');}catch{this.close(key);}
    };
    dc.onclose=()=>{if(this.peers.get(key)===p)this.close(key);};
-  }else if(outgoing&&this.stream)for(const track of this.stream.getTracks())pc.addTrack(track,this.stream);
+  }else if(outgoing&&this.stream){
+   const video=this.stream.getVideoTracks()[0], audio=this.stream.getAudioTracks()[0];
+   if(video)p.videoSender=pc.addTrack(video,this.stream);
+   p.audioSender=audio?pc.addTrack(audio,this.stream):pc.addTransceiver('audio',{direction:'sendonly'}).sender;
+  }
   preferCodecs(pc);this.balanceTracks();return p;
  }
  private async offer(p:Peer,restart=false){
@@ -213,7 +282,10 @@ export class Peers {
    const snapshot=this.snapshot;if(this.disposed||!snapshot||!snapshot.members.some(m=>m.user_id===id&&m.client_id===signal.client))return;
    const streams=activeStreams(snapshot);
    if(signal.kind==='watch'){
-    if(!this.stream||this.localSession!==signal.session||!streams.some(s=>s.broadcaster_id===this.self&&s.session_id===signal.session))return;
+    while(this.sourceChange) await this.sourceChange.catch(()=>{});
+    const current=this.snapshot;
+    if(this.disposed||!current?.members.some(m=>m.user_id===id&&m.client_id===signal.client))return;
+    if(!this.stream||this.localSession!==signal.session||!activeStreams(current).some(s=>s.broadcaster_id===this.self&&s.session_id===signal.session))return;
     const existing=this.peers.get(this.key(id,true));if(existing?.connection===signal.connection)return;
     const p=this.create(id,signal.connection,signal.session,true,signal.preview===true);
     p.economy=signal.economy===true;

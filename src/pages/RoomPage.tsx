@@ -37,6 +37,9 @@ export function RoomPage({
   const streams=activeStreams(snapshot);
   const [posters,setPosters]=useState<Record<string,string>>({});
   const [shareOptions,setShareOptions]=useState(false);
+  const [broadcastMenuOpen, setBroadcastMenuOpen] = useState(false);
+  const broadcastActions = useRef<HTMLDivElement>(null);
+  const broadcastMenuToggle = useRef<HTMLButtonElement>(null);
   const [profile,setProfile]=useState<CaptureProfile>(defaultProfile);
   const freeze=useRef<(()=>void)|null>(null);
   const savePoster=useCallback((session:string,image:string)=>setPosters(previous=>previous[session]===image?previous:{...previous,[session]:image}),[]);
@@ -85,6 +88,19 @@ export function RoomPage({
   useEffect(() => {
     if (sidebarOpen) sidebarClose.current?.focus();
   }, [sidebarOpen]);
+  useEffect(() => {
+    if (!media.sharing) setBroadcastMenuOpen(false);
+  }, [media.sharing]);
+  useEffect(() => {
+    if (!broadcastMenuOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !broadcastActions.current?.contains(event.target)) {
+        setBroadcastMenuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [broadcastMenuOpen]);
   useEffect(() => {
     if (!media.connectionIssue) return;
     setConnectionNotice(media.connectionIssue);
@@ -175,25 +191,50 @@ export function RoomPage({
   );
   const share = async (requested:CaptureProfile) => {
     if (sharingBusy) return;
+    const controller = session.current;
+    const replacing = media.sharing;
+    if (!controller) return;
     setSharingBusy(true);
+    setShareOptions(false);
     setError("");
     setNotice("");
     try {
       // getDisplayMedia runs immediately within the click gesture, before RPCs.
       const capture = await captureGame(requested);
-      setProfile(requested);setShareOptions(false);
-      if (!session.current) {
+      if (session.current !== controller) {
         capture.dispose?.();
         capture.stream.getTracks().forEach((t) => t.stop());
         return;
       }
-      await session.current.share(capture);
+      if (replacing) await controller.replaceCapture(capture);
+      else await controller.share(capture);
+      setProfile(requested);
       const actual = capture.settings;
       setNotice(
         `${capture.audio}. ${capture.tuning}${actual.width && actual.height ? ` Captura retornada: ${actual.width} × ${actual.height}${actual.frameRate ? `, ${actual.frameRate.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} FPS` : ""}.` : ""}`,
       );
     } catch (e) {
       report(e);
+    } finally {
+      setSharingBusy(false);
+    }
+  };
+  const changeQuality = async (requested: CaptureProfile) => {
+    const controller = session.current;
+    if (sharingBusy || !controller) return;
+    setShareOptions(false);
+    setSharingBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const actual = await controller.changeQuality(requested);
+      if (session.current !== controller) return;
+      setProfile(requested);
+      setNotice(actual.width && actual.height
+        ? `Qualidade atualizada. Captura atual: ${actual.width} × ${actual.height}${actual.frameRate ? `, ${actual.frameRate.toLocaleString("pt-BR", {maximumFractionDigits: 1})} FPS` : ""}.`
+        : "Resolução e FPS solicitados ao navegador.");
+    } catch (error) {
+      report(error);
     } finally {
       setSharingBusy(false);
     }
@@ -404,15 +445,49 @@ export function RoomPage({
         <div className="control-bar">
           <div className="main-actions">
             {media.sharing ? (
-              <button
-                className="danger"
-                onClick={() => {
-                  void session.current?.stop().catch(report);
+              <div
+                className="broadcast-actions"
+                ref={broadcastActions}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setBroadcastMenuOpen(false);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Escape" || !broadcastMenuOpen) return;
+                  event.stopPropagation();
+                  setBroadcastMenuOpen(false);
+                  broadcastMenuToggle.current?.focus();
                 }}
               >
-                <Icon name="stop" size={17} />
-                Parar transmissão
-              </button>
+                <button type="button" className="danger broadcast-stop" onClick={() => {
+                  setBroadcastMenuOpen(false);
+                  void session.current?.stop().catch(report);
+                }}>
+                  <Icon name="stop" size={17} />
+                  Parar transmissão
+                </button>
+                <button
+                  type="button"
+                  className="danger broadcast-menu-toggle"
+                  ref={broadcastMenuToggle}
+                  disabled={sharingBusy}
+                  aria-label="Opções da transmissão"
+                  aria-expanded={broadcastMenuOpen}
+                  aria-controls="broadcast-menu"
+                  onClick={() => setBroadcastMenuOpen(open => !open)}
+                >
+                  <Icon name="chevronDown" size={16} />
+                </button>
+                <div id="broadcast-menu" className="broadcast-menu" hidden={!broadcastMenuOpen}>
+                  <button type="button" className="secondary" onClick={() => {
+                    setBroadcastMenuOpen(false);
+                    broadcastMenuToggle.current?.focus();
+                    setShareOptions(true);
+                  }}>
+                    <Icon name="settings" size={17} />
+                    Editar transmissão
+                  </button>
+                </div>
+              </div>
             ) : (
               <button
                 className="primary"
@@ -539,7 +614,7 @@ export function RoomPage({
           </div>
         </div>
       </main>
-      {shareOptions&&<ShareOptions initial={profile} onClose={()=>setShareOptions(false)} onShare={requested=>void share(requested)}/>}
+      {shareOptions&&<ShareOptions initial={profile} onClose={()=>setShareOptions(false)} onShare={requested=>void share(requested)} onQuality={media.sharing ? requested=>void changeQuality(requested) : undefined}/>}
       {settings && (
         <Settings
           onClose={() => setSettings(false)}

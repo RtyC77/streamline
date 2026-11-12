@@ -14,6 +14,15 @@ export function captureSupported() {
     typeof RTCPeerConnection !== "undefined"
   );
 }
+export function applyCaptureQuality(video: MediaStreamTrack, profile: CaptureProfile) {
+  const target = videoProfile(profile);
+  const supported = navigator.mediaDevices.getSupportedConstraints();
+  return video.applyConstraints({
+    ...(supported.width ? { width: { ideal: target.width, max: target.width } } : {}),
+    ...(supported.height ? { height: { ideal: target.height, max: target.height } } : {}),
+    ...(supported.frameRate ? { frameRate: { ideal: target.fps, max: target.fps } } : {}),
+  });
+}
 export async function captureGame(profile:CaptureProfile=defaultProfile): Promise<CaptureInfo> {
   const target=videoProfile(profile);
   const allowSystemAudio=profile.systemAudio===true;
@@ -62,18 +71,7 @@ export async function captureGame(profile:CaptureProfile=defaultProfile): Promis
     }
   let tuning = "Resolução e FPS solicitados ao navegador.";
   try {
-    const supported = navigator.mediaDevices.getSupportedConstraints();
-    await video.applyConstraints({
-      ...(supported.width
-        ? { width: { ideal: target.width, max: target.width } }
-        : {}),
-      ...(supported.height
-        ? { height: { ideal: target.height, max: target.height } }
-        : {}),
-      ...(supported.frameRate
-        ? { frameRate: { ideal: target.fps, max: target.fps } }
-        : {}),
-    });
+    await applyCaptureQuality(video, profile);
   } catch {
     tuning =
       "O navegador não aceitou todos os limites de captura; confira a resolução e o FPS reais.";

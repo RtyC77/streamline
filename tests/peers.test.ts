@@ -32,6 +32,13 @@ class FakeTrack {
   getSettings() {
     return { width: 1920, height: 1080 };
   }
+  applyConstraints = vi.fn(async (_constraints: MediaTrackConstraints) => {});
+}
+class FakeSender {
+  constructor(public track: FakeTrack | null) {}
+  replaceTrack = vi.fn(async (next: FakeTrack | null) => { this.track = next; });
+  getParameters = () => ({encodings: [{}]});
+  setParameters = vi.fn(async (_parameters: RTCRtpSendParameters) => {});
 }
 class FakePC {
   data:{onopen:(()=>void)|null;onmessage:((e:{data:string})=>void)|null;onclose:(()=>void)|null;send:ReturnType<typeof vi.fn>;close:ReturnType<typeof vi.fn>}|null=null;
@@ -46,6 +53,7 @@ class FakePC {
   ontrack: ((e: { track: FakeTrack }) => void) | null = null;
   onconnectionstatechange: (() => void) | null = null;
   added: FakeTrack[] = [];
+  senders: FakeSender[] = [];
   closed = false;
   getTransceivers() {
     return [];
@@ -54,13 +62,22 @@ class FakePC {
     return [];
   }
   getSenders() {
-    return [];
+    return this.senders;
   }
   constructor() {
     FakePC.all.push(this);
   }
   addTrack(t: FakeTrack) {
     this.added.push(t);
+    return this.makeSender(t);
+  }
+  addTransceiver() {
+    return {sender: this.makeSender(null)};
+  }
+  private makeSender(track: FakeTrack | null) {
+    const sender = new FakeSender(track);
+    this.senders.push(sender);
+    return sender;
   }
   createOffer = vi.fn(async () => ({ type: "offer", sdp: "offer" }));
   createAnswer = vi.fn(async () => ({ type: "answer", sdp: "answer" }));
@@ -225,6 +242,55 @@ describe("Negociação por espectador", () => {
     expect(FakePC.all).toHaveLength(2);expect(FakePC.all[1].added[0]).toBe(track);
     h.manager.select(sid);expect(incoming.closed).toBe(true);expect(FakePC.all[1].closed).toBe(false);expect(track.readyState).toBe('live');
     expect(h.messages.some(s=>s.kind==='unwatch'&&s.session===otherSession)).toBe(true);h.manager.dispose();
+  });
+  it('troca vídeo e ativa áudio na mesma conexão, preservando a fonte se a troca falhar', async () => {
+    const h = setup(host, hc);
+    const original = new FakeStream(), originalVideo = new FakeTrack();
+    original.addTrack(originalVideo);
+    h.manager.setLocal(original as unknown as MediaStream, sid, 'Sem áudio');
+    h.manager.receive(viewer, {kind:'watch', to:host, session:sid, connection:crypto.randomUUID(), client:vc});
+    await flush();
+    const pc = FakePC.all[0];
+    const [videoSender, audioSender] = pc.senders;
+    const next = new FakeStream(), nextVideo = new FakeTrack(), nextAudio = new FakeTrack();
+    nextAudio.kind = 'audio';
+    next.addTrack(nextVideo);
+    next.addTrack(nextAudio);
+    const replace = () => h.manager.replaceLocal(next as unknown as MediaStream, 'Com áudio', {resolution:1080,fps:60}, null);
+    audioSender.replaceTrack.mockRejectedValueOnce(new Error('Troca de áudio recusada'));
+    await expect(replace()).rejects.toThrow('Troca de áudio recusada');
+    expect(videoSender.track).toBe(originalVideo);
+    expect(originalVideo.stop).not.toHaveBeenCalled();
+    await replace();
+    expect(videoSender.track).toBe(nextVideo);
+    expect(audioSender.track).toBe(nextAudio);
+    expect(originalVideo.stop).toHaveBeenCalledOnce();
+    expect(FakePC.all).toEqual([pc]);
+    expect(pc.closed).toBe(false);
+    expect(pc.createOffer).toHaveBeenCalledOnce();
+    h.manager.dispose();
+  });
+  it('aplica resolução e FPS na captura e no encoder da conexão ativa', async () => {
+    vi.stubGlobal('navigator', {mediaDevices: {getSupportedConstraints: () => ({width:true,height:true,frameRate:true})}});
+    const h = setup(host, hc), stream = new FakeStream(), video = new FakeTrack();
+    stream.addTrack(video);
+    h.manager.setLocal(stream as unknown as MediaStream, sid, 'Sem áudio');
+    const connection = crypto.randomUUID();
+    h.manager.receive(viewer, {kind:'watch', to:host, session:sid, connection, client:vc});
+    await flush();
+    h.manager.receive(viewer, {kind:'answer', sdp:'answer', to:host, session:sid, connection, client:vc});
+    await flush();
+    const pc = FakePC.all[0];
+    await h.manager.changeQuality({resolution:1080,fps:60});
+    expect(video.applyConstraints).toHaveBeenCalledWith({
+      width:{ideal:1920,max:1920},height:{ideal:1080,max:1080},frameRate:{ideal:60,max:60},
+    });
+    expect(pc.senders[0].setParameters).toHaveBeenLastCalledWith(expect.objectContaining({
+      encodings:[expect.objectContaining({maxFramerate:60,maxBitrate:12_000_000})],
+    }));
+    expect(pc.senders[0].replaceTrack).not.toHaveBeenCalled();
+    expect(pc.closed).toBe(false);
+    h.manager.dispose();
   });
   it('envia prévia pelo data channel sem trilhas de mídia e fecha após confirmação',async()=>{
     const h=setup(host,hc),stream=new FakeStream(),track=new FakeTrack();stream.addTrack(track);

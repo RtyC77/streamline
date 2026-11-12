@@ -1,4 +1,5 @@
 import type { CaptureInfo } from "../media/capture";
+import {defaultProfile,type CaptureProfile} from '../media/profile';
 import {firstStill} from '../media/still';
 import { Peers } from "../media/peers";
 import { Cameras } from "../media/cameras";
@@ -295,13 +296,7 @@ export class RoomSession {
           throw new Error("A sala ou a captura foi encerrada.");
         this.captureCleanup=capture.dispose??null;
         this.peers?.setLocal(capture.stream, claimed, capture.audio,capture.profile,poster);
-        capture.stream.getVideoTracks()[0].addEventListener(
-          "ended",
-          () => {
-            void this.stop().catch(this.callbacks.error);
-          },
-          { once: true },
-        );
+        this.watchCaptureEnd(capture.stream.getVideoTracks()[0]);
         void this.signaling?.notifyChange().catch(this.callbacks.error);
       });
     } catch (e) {
@@ -318,6 +313,42 @@ export class RoomSession {
     } finally {
       this.starting = false;
       this.background?.refresh();
+    }
+  }
+  private watchCaptureEnd(video: MediaStreamTrack) {
+    video.addEventListener("ended", () => {
+      if (this.peers?.ownsTrack(video)) void this.stop().catch(this.callbacks.error);
+    }, { once: true });
+  }
+  async changeQuality(profile: CaptureProfile) {
+    const session = this.session;
+    return this.enqueue(async () => {
+      if (!session || session !== this.session || this.closed || !this.peers)
+        throw new Error("A transmissão foi encerrada.");
+      return this.peers.changeQuality(profile);
+    });
+  }
+  async replaceCapture(capture: CaptureInfo) {
+    const session = this.session;
+    try {
+      const poster = await firstStill(capture.stream);
+      await this.enqueue(async () => {
+        if (!session || session !== this.session || this.closed || !this.peers)
+          throw new Error("A transmissão foi encerrada.");
+        const previousCleanup = this.captureCleanup;
+        await this.peers.replaceLocal(capture.stream, capture.audio, capture.profile ?? defaultProfile, poster);
+        const video = capture.stream.getVideoTracks()[0];
+        if (this.closed || session !== this.session || !this.peers?.ownsTrack(video))
+          throw new Error("A transmissão foi encerrada.");
+        this.captureCleanup = capture.dispose ?? null;
+        this.watchCaptureEnd(video);
+        previousCleanup?.();
+        if (video.readyState !== "live") void this.stop().catch(this.callbacks.error);
+      });
+    } catch (error) {
+      capture.dispose?.();
+      capture.stream.getTracks().forEach(track => track.stop());
+      throw error;
     }
   }
   async stop() {
