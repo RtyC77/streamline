@@ -455,15 +455,12 @@ h2 {
   border-right: 1px solid #2b303b;
   min-width: 0;
 }
-.sidebar-brand {
+.sidebar-title {
+  margin: 0;
   padding: 25px 24px;
   border-bottom: 1px solid #2b303b;
-}
-.sidebar .brand {
   font-size: 21px;
-}
-.room-info {
-  padding: 29px 24px 22px;
+  overflow-wrap: anywhere;
 }
 .section-label {
   font-size: 10px;
@@ -471,40 +468,22 @@ h2 {
   font-weight: 650;
   color: #8f9bad;
 }
-.room-info h2 {
-  font-size: 18px;
-  margin: 12px 0 9px;
-}
-.private-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: #8d9caa;
-}
-.invite-box {
-  margin: 0 19px;
-  padding: 16px 13px;
+.invite-menu {
+  margin: 16px 20px 0;
   background: #1d222a;
   border: 1px solid #303641;
   border-radius: 10px;
 }
-.invite-box label {
-  font-size: 9px;
-  color: #9ba6b7;
-  letter-spacing: 1px;
+.invite-menu summary {
+  padding: 12px;
+  border-radius: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
 }
-.invite-box input {
-  padding: 10px;
-  font-size: 10px;
-  background: #14181f;
-  color: #8794a6;
-}
-.invite-box button {
-  margin-top: 10px;
-  font-size: 11px;
-  padding: 10px 8px;
-  background: #2c343c;
+.invite-menu button {
+  width: calc(100% - 16px);
+  margin: 0 8px 8px;
 }
 .participants {
   padding: 28px 20px;
@@ -552,15 +531,6 @@ h2 {
   border: 1px solid currentColor;
   border-radius: inherit;
   overflow-wrap: anywhere;
-}
-.camera-toggle {
-  margin-top: 8px;
-}
-.camera-error {
-  margin: 8px 0 0;
-  color: #ffaeae;
-  font-size: 12px;
-  line-height: 1.4;
 }
 .avatar {
   position: relative;
@@ -873,6 +843,9 @@ h2 {
   align-items: center;
   gap: 14px;
 }
+.main-actions {
+  flex-wrap: wrap;
+}
 .main-actions > button {
   font-size: 11px;
   padding: 11px 14px;
@@ -1077,32 +1050,8 @@ dialog > .muted {
     border-right: 0;
     border-bottom: 1px solid #303945;
   }
-  .sidebar-brand {
+  .sidebar-title {
     padding: 18px 20px;
-  }
-  .room-info {
-    padding: 16px 20px;
-  }
-  .room-info .section-label {
-    display: none;
-  }
-  .room-info h2 {
-    margin: 0 0 7px;
-  }
-  .invite-box {
-    margin: 0 20px 10px;
-    padding: 12px;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 8px;
-  }
-  .invite-box label {
-    grid-column: 1/-1;
-    margin-bottom: 0;
-  }
-  .invite-box button {
-    margin: 0;
-    width: auto;
   }
   .participants {
     padding: 12px 20px 18px;

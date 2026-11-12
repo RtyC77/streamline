@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Brand, Icon } from "../components/Icon";
+import { Icon } from "../components/Icon";
 import { Player } from "../components/Player";
 import { CameraPreview } from "../components/CameraPreview";
 import {TransitionCover} from '../components/TransitionCover';
@@ -193,7 +193,7 @@ export function RoomPage({
       setTimeout(() => setCopied(false), 2500);
     } catch {
       setError(
-        "Não foi possível copiar. Selecione o link de convite na barra lateral.",
+        "Não foi possível copiar o convite. Verifique a permissão de acesso à área de transferência e tente novamente.",
       );
     }
   };
@@ -215,30 +215,14 @@ export function RoomPage({
         <button ref={sidebarClose} className="secondary sidebar-close" onClick={closeSidebar}>
           Fechar detalhes
         </button>
-        <div className="sidebar-brand">
-          <Brand />
-        </div>
-        <div className="room-info">
-          <div className="section-label">SEU ESPAÇO</div>
-          <h2>{snapshot.room.name}</h2>
-          <span className="private-label">
-            <Icon name="lock" size={13} />
-            Sala privada
-          </span>
-        </div>
-        <div className="invite-box">
-          <label htmlFor="room-invite">CONVIDE A GALERA</label>
-          <input
-            id="room-invite"
-            readOnly
-            value={inviteLink(invite)}
-            onFocus={(e) => e.target.select()}
-          />
+        <h1 className="sidebar-title">{snapshot.room.name}</h1>
+        <details className="invite-menu">
+          <summary>Convite</summary>
           <button className="secondary wide" onClick={() => void copy()}>
             <Icon name={copied ? "check" : "copy"} size={16} />
             {copied ? "Convite copiado" : "Copiar convite"}
           </button>
-        </div>
+        </details>
         <div className="participants">
           <div className="participant-heading">
             <span className="section-label">PARTICIPANTES</span>
@@ -288,10 +272,6 @@ export function RoomPage({
               </li>
             ))}
           </ul>
-          <button className="secondary wide camera-toggle" disabled={cameraBusy || (!ready && !cameraOn)} onClick={() => void toggleCamera()}>
-            {cameraBusy ? "Solicitando acesso à câmera…" : cameraOn ? "Desativar câmera" : "Ativar câmera"}
-          </button>
-          {cameraError && <p className="camera-error" role="alert">{cameraError}</p>}
           {snapshot.members.length < capacity && (
             <div className="empty-seat">
               <span>+</span>Tem lugar para mais {capacity - snapshot.members.length}
@@ -446,6 +426,13 @@ export function RoomPage({
                 {sharingBusy ? "Preparando…" : "Compartilhar jogo"}
               </button>
             )}
+            <button
+              className="secondary camera-toggle"
+              disabled={cameraBusy || (!ready && !cameraOn)}
+              onClick={() => void toggleCamera()}
+            >
+              {cameraBusy ? "Solicitando acesso à câmera…" : cameraOn ? "Desativar câmera" : "Ativar câmera"}
+            </button>
             <div className="volume">
               <Icon name="sound" size={18} />
               <input
@@ -497,6 +484,7 @@ export function RoomPage({
           <div className="notice connection-toast" role="alert">{connectionNotice}</div>
         )}
         <div className="room-details">
+          {cameraError && <div className="error room-message" role="alert">{cameraError}</div>}
           {error && (
             <div className="error room-message" role="alert">
               <span>{error}</span>
