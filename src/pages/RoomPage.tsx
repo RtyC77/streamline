@@ -216,7 +216,6 @@ export function RoomPage({
         <button ref={sidebarClose} className="secondary sidebar-close" onClick={closeSidebar}>
           Fechar detalhes
         </button>
-        <h1 className="sidebar-title">{snapshot.room.name}</h1>
         <button className="secondary invite-copy" onClick={() => void copy()}>
           <Icon name={copied ? "check" : "copy"} size={16} />
           {copied ? "Convite copiado" : "Copiar convite"}
@@ -297,6 +296,7 @@ export function RoomPage({
       </aside>
       <main className="room-main">
         <header className="room-header">
+          <h1><Icon name="screen" size={21} /><span>{snapshot.room.name}</span></h1>
           <button ref={sidebarToggle} className="secondary sidebar-toggle"
             aria-expanded={sidebarOpen} aria-controls="room-sidebar"
             onClick={() => setSidebarOpen(!sidebarOpen)}>

@@ -8,7 +8,10 @@ afterEach(()=>{vi.clearAllMocks();vi.unstubAllGlobals();});
 describe('Capacidade da sala',()=>{
  it('mostra intervalo acessível e estimativa de upload de sete espectadores',()=>{
   const html=renderToStaticMarkup(<RoomCapacity value={8} onChange={()=>{}} disabled={false}/>);
-  expect(html).toContain('min="2"');expect(html).toContain('max="8"');expect(html).toContain('21 Mbps');expect(html).toContain('não medições');
+  expect(html).toContain('min="2"');
+  expect(html).toContain('max="8"');
+  expect(html).toContain('21 Mbps');
+  expect(html).not.toContain('Uso do Supabase e Cloudflare');
  });
  it('envia limite somente na criação, preservando a autoridade do convite na entrada',async()=>{
   vi.stubGlobal('sessionStorage',{getItem:()=>crypto.randomUUID()});

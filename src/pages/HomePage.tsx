@@ -97,14 +97,9 @@ export function HomePage({
       </header>
       <main className="home-main">
         <section className="entry-card" aria-label="Criar ou entrar em uma sala">
-          <div className="card-top">
-            <span className="card-symbol">
-              <Icon name="screen" size={23} />
-            </span>
-          </div>
           <nav className="entry-nav" aria-label="Opções da sala">
-            <button type="button" className="secondary" aria-pressed={!joining} disabled={busy} onClick={() => changeMode(false)}>Criar sala</button>
-            <button type="button" className="secondary" aria-pressed={joining} disabled={busy} onClick={() => changeMode(true)}>Entrar na sala</button>
+            <button type="button" aria-pressed={!joining} disabled={busy} onClick={() => changeMode(false)}><Icon name="plus" size={19} /> Criar sala</button>
+            <button type="button" aria-pressed={joining} disabled={busy} onClick={() => changeMode(true)}><Icon name="link" size={19} /> Entrar na sala</button>
           </nav>
           <form
             onSubmit={(e) => {
@@ -200,14 +195,17 @@ export function HomePage({
           )}
         </section>
         <section className="room-directory" aria-labelledby="room-directory-title">
-          <h1 id="room-directory-title">Salas disponíveis</h1>
+          <h1 id="room-directory-title"><Icon name="users" size={22} /> Salas disponíveis</h1>
           {directoryError && <p role="status">Não foi possível carregar as salas. {directoryError}</p>}
           {configured && !rooms && !directoryError && <p role="status">Carregando salas…</p>}
-          {rooms?.length === 0 && <p>Nenhuma sala disponível nesta página.</p>}
+          {rooms?.length === 0 && <p className="directory-empty">Nenhuma sala disponível nesta página.</p>}
           <ul className="room-directory-list">
             {rooms?.slice(0, 25).map((room) => (
               <li key={room.id}>
-                <div>
+                <span className="directory-room-icon">
+                  <Icon name={room.access_mode === "public" ? "screen" : "lock"} size={24} />
+                </span>
+                <div className="directory-room-info">
                   <h2>{room.name}</h2>
                   <p>{room.access_mode === "public" ? "Pública" : room.access_mode === "private" ? "Privada · Senha" : "Somente por convite"} · {room.participants.length}/{room.max_members}</p>
                   {room.participants.length > 0 && (

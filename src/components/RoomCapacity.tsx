@@ -9,6 +9,5 @@ export function RoomCapacity({value,onChange,disabled}:{value:number;onChange:(v
   <div className="capacity-scale"><span>2 · Menor uso</span><span>8 · Maior uso</span></div>
   <p id="capacity-impact"><strong>Impacto estimado: {impact.toLowerCase()}</strong> · inclui você</p>
   <p id="capacity-details">Com a sala cheia, vídeo a 3 Mbps pode somar cerca de <strong>{upload} Mbps de upload do transmissor</strong>, mais áudio e tráfego de rede.</p>
-  <details><summary>Uso do Supabase e Cloudflare</summary><p>Mais pessoas conectadas geram mais presença e sinalização no Supabase. Uma sala cheia com um transmissor faz aproximadamente {180+(value-1)*120} renovações de participação por hora, além das ações e reconexões.</p><p>O vídeo e o áudio seguem diretamente entre os participantes. O Cloudflare entrega os arquivos do site. Vagas vazias não criam conexões ou consultas. Estes valores são estimativas, não medições nem previsão de cobrança.</p></details>
  </fieldset>;
 }
