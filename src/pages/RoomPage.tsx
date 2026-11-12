@@ -9,6 +9,7 @@ import {ShareOptions} from '../components/ShareOptions';
 import {activeStreams} from '../types';
 import {defaultProfile,type CaptureProfile} from '../media/profile';
 import { captureGame, captureSupported } from "../media/capture";
+import { roomSounds } from "../media/room-sounds";
 import { inviteLink } from "../services/rooms";
 import { explain } from "../services/errors";
 import { RoomSession } from "../services/session";
@@ -101,11 +102,18 @@ export function RoomPage({
   }, [diagnostics]);
   useEffect(() => {
     let cancelled = false;
+    const sounds = roomSounds(initial, self);
+    sounds.unlock();
+    window.addEventListener("click", sounds.unlock, true);
+    window.addEventListener("keydown", sounds.unlock, true);
     setCameras({});
     setCameraBusy(false);
     setCameraError("");
     const controller = new RoomSession(initial, self, {
-      snapshot: setSnapshot,
+      snapshot: (next) => {
+        sounds.update(next);
+        setSnapshot(next);
+      },
       media: setMedia,
       cameras: setCameras,
       cameraError: setCameraError,
@@ -134,6 +142,9 @@ export function RoomPage({
     window.addEventListener("pageshow", show);
     return () => {
       cancelled = true;
+      window.removeEventListener("click", sounds.unlock, true);
+      window.removeEventListener("keydown", sounds.unlock, true);
+      sounds.close();
       session.current = null;
       window.removeEventListener("pagehide", hide);
       window.removeEventListener("pageshow", show);
@@ -268,12 +279,6 @@ export function RoomPage({
           </ul>
         </div>
         <div className="sidebar-bottom">
-          <span className="connection-label">
-            <span
-              className={`status-dot ${connection !== "Conectado" ? "pending" : ""}`}
-            />
-            {connection}
-          </span>
           <div className="self-row">
             <span className="avatar avatar-self">
               {snapshot.members
@@ -281,9 +286,17 @@ export function RoomPage({
                 ?.nickname.slice(0, 2)
                 .toUpperCase()}
             </span>
-            <strong>
-              {snapshot.members.find((m) => m.user_id === self)?.nickname}
-            </strong>
+            <div className="self-details">
+              <strong>
+                {snapshot.members.find((m) => m.user_id === self)?.nickname}
+              </strong>
+              <span className="connection-label">
+                <span
+                  className={`status-dot ${connection !== "Conectado" ? "pending" : ""}`}
+                />
+                {connection}
+              </span>
+            </div>
             <button
               className="icon-button"
               onClick={() => setSettings(true)}
