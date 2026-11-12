@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { Brand } from "../components/Icon";
+import { useEffect, useRef, useState } from "react";
+import { Brand, Icon } from "../components/Icon";
 import {
-  closeStaffRoom, staffAudit, staffRooms, staffUsers, updateUser,
+  closeStaffRoom, confirmUserEmail, staffAudit, staffRooms, staffUsers, updateUser,
   type AuditEntry, type Profile, type StaffRoom, type StaffUser,
 } from "../services/accounts";
 import { explain } from "../services/errors";
@@ -17,6 +17,7 @@ const actionNames: Record<string, string> = {
   demote: "Rebaixar para usuário",
   bootstrap: "Inicializar SuperAdmin",
   close_room: "Finalizar sala",
+  confirm_email: "Confirmar e-mail manualmente",
 };
 const pageSize = 25;
 
@@ -34,6 +35,7 @@ function Pagination({ page, more, change }: { page: number; more: boolean; chang
 }
 
 export function AdminPage({ profile, logout }: { profile: Profile; logout: () => void }) {
+  const content = useRef<HTMLElement>(null);
   const [tab, setTab] = useState<"users" | "audit" | "rooms">("users");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -84,14 +86,20 @@ export function AdminPage({ profile, logout }: { profile: Profile; logout: () =>
     setTab(next);
   }
 
-  async function run(action: () => Promise<unknown>, success: string) {
+  function changePage(next: number) {
+    setPage(next);
+    content.current?.scrollTo(0, 0);
+    content.current?.focus({ preventScroll: true });
+  }
+
+  async function run(action: () => Promise<unknown>, success: string, alreadyDone = "A sala já foi encerrada.") {
     if (acting) return;
     setActing(true);
     setError("");
     setNotice("");
     try {
       const result = await action();
-      if (result === false) setNotice("A sala já foi encerrada.");
+      if (result === false) setNotice(alreadyDone);
       else setNotice(success);
     } catch (cause) {
       setError(explain(cause));
@@ -114,17 +122,19 @@ export function AdminPage({ profile, logout }: { profile: Profile; logout: () =>
     <header className="home-header">
       <Brand />
       <div className="account-actions">
-        <span>{profile.username} · {roleNames[profile.role]}</span>
-        <a className="secondary" href="/">Salas</a>
-        <button className="secondary" onClick={logout}>Sair da conta</button>
+        <span className="admin-identity">{profile.username} · {roleNames[profile.role]}</span>
+        <a className="account-control" href="/"><Icon name="screen" size={16} /> Salas</a>
+        <button type="button" className="account-control account-control--exit" onClick={logout}>
+          <Icon name="exit" size={16} /> Sair da conta
+        </button>
       </div>
     </header>
-    <main>
-      <h1>Administração</h1>
-      <nav className="account-actions" aria-label="Seções administrativas">
-        <button className="secondary" aria-pressed={tab === "users"} onClick={() => changeTab("users")}>Usuários</button>
-        <button className="secondary" aria-pressed={tab === "audit"} onClick={() => changeTab("audit")}>Histórico</button>
-        {superadmin && <button className="secondary" aria-pressed={tab === "rooms"} onClick={() => changeTab("rooms")}>Salas ativas</button>}
+    <main className="admin-scroll" ref={content} tabIndex={0} aria-labelledby="admin-title">
+      <h1 id="admin-title">Administração</h1>
+      <nav className="account-actions admin-sections" aria-label="Seções administrativas">
+        <button className="secondary" aria-pressed={tab === "users"} onClick={() => changeTab("users")}><Icon name="users" size={16} /> Usuários</button>
+        <button className="secondary" aria-pressed={tab === "audit"} onClick={() => changeTab("audit")}><Icon name="chart" size={16} /> Histórico</button>
+        {superadmin && <button className="secondary" aria-pressed={tab === "rooms"} onClick={() => changeTab("rooms")}><Icon name="screen" size={16} /> Salas ativas</button>}
         <button className="secondary" disabled={loading || acting}
           onClick={() => { setError(""); setRevision((value) => value + 1); }}>Atualizar</button>
       </nav>
@@ -163,6 +173,12 @@ export function AdminPage({ profile, logout }: { profile: Profile; logout: () =>
                 <div><dt>Último login</dt><dd>{date(user.last_sign_in_at)}</dd></div>
               </dl>
               {editable && <div className="account-actions">
+                {user.role === "user" && user.status === "active" && !user.email_confirmed_at &&
+                  <button type="button" className="secondary" disabled={acting} onClick={() => {
+                    if (window.confirm(`Confirmar manualmente o e-mail de ${user.username} (${user.email})? Faça isso apenas se verificou que o endereço pertence à pessoa. Ela poderá entrar com a senha do cadastro.`)) {
+                      void run(() => confirmUserEmail(user), "E-mail confirmado. A pessoa já pode entrar com sua senha.", "O e-mail já estava confirmado.");
+                    }
+                  }}>{actionNames.confirm_email}</button>}
                 {user.can_create_rooms ? actionButton(user, "revoke_rooms", true) : actionButton(user, "grant_rooms")}
                 {canBlock && (user.status === "blocked" ? actionButton(user, "unblock") : actionButton(user, "block", true))}
                 {superadmin && user.role === "user" && actionButton(user, "promote")}
@@ -171,7 +187,7 @@ export function AdminPage({ profile, logout }: { profile: Profile; logout: () =>
             </li>;
           })}
         </ul>
-        <Pagination page={page} more={users.length > pageSize} change={setPage} />
+        <Pagination page={page} more={users.length > pageSize} change={changePage} />
       </> : tab === "audit" ? <>
         {!audit.length && <p>Nenhum registro nesta página.</p>}
         <ul className="admin-list">
@@ -184,13 +200,13 @@ export function AdminPage({ profile, logout }: { profile: Profile; logout: () =>
             </dl>
           </li>)}
         </ul>
-        <Pagination page={page} more={audit.length > pageSize} change={setPage} />
+        <Pagination page={page} more={audit.length > pageSize} change={changePage} />
       </> : superadmin && <>
         {!rooms.length && <p>Nenhuma sala ativa.</p>}
         <ul className="admin-list">{rooms.map((room) => <li key={room.id}>
           <h2>{room.name}</h2>
           <p>{room.participants} participante(s) · {room.transmitting ? "Transmitindo" : "Sem transmissão"}</p>
-          <button className="danger" disabled={acting} onClick={() => {
+          <button className="danger admin-room-action" disabled={acting} onClick={() => {
             if (window.confirm(`Finalizar ${room.name}?`)) void run(() => closeStaffRoom(room.id), "Sala finalizada.");
           }}>Finalizar sala</button>
         </li>)}</ul>

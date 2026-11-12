@@ -15,7 +15,9 @@ const ids = Array.from({ length: 10 }, () => randomUUID()),
 await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth; create schema realtime;
  create table auth.users(id uuid primary key,email text unique,email_confirmed_at timestamptz,
    is_anonymous boolean not null default false,raw_user_meta_data jsonb,
-   created_at timestamptz not null default now(),last_sign_in_at timestamptz);
+   created_at timestamptz not null default now(),last_sign_in_at timestamptz,
+   confirmation_token text,updated_at timestamptz);
+ create table auth.one_time_tokens(user_id uuid,token_type text);
  grant usage on schema auth,realtime to authenticated;
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  create function realtime.topic() returns text language sql stable as $$ select current_setting('realtime.topic',true) $$;
@@ -514,6 +516,7 @@ try {
   await admin("update auth.users set is_anonymous=true,email=null,email_confirmed_at=null where id=$1", [ids[9]]);
   await admin("update auth.users set last_sign_in_at=now() where id=$1", [ids[0]]);
   await db.exec(await readFile(new URL("../supabase/migrations/202611120011_accounts.sql", import.meta.url), "utf8"));
+  await db.exec(await readFile(new URL("../supabase/migrations/202611120012_staff_confirm_email.sql", import.meta.url), "utf8"));
   await db.exec("set role anon");
   await denied(() => rpc("list_rooms", [25, 0]), "visitante não acessa o catálogo");
   await denied(() => rpc("join_room", [token, "Visitante", tabs[1]]), "visitante não entra por convite");
@@ -541,6 +544,7 @@ try {
   await denied(() => rpc("create_listed_room", ["Falso", tabs[10], 5, "public", null]), "RPC de criação listada exige permissão");
   await denied(() => db.query("insert into public.rooms(created_by) values($1)", [newcomer]), "tabela de salas rejeita criação direta");
   await denied(() => rpc("staff_users", []), "usuário comum não lista usuários diretamente");
+  await denied(() => rpc("staff_confirm_email", [unverified, "pending@example.test"]), "usuário comum não confirma outra conta");
   await denied(() => rpc("staff_update_user", [newcomer, "grant_rooms", 0]), "usuário comum não altera permissões");
   await denied(() => rpc("bootstrap_streamlite_superadmin", [ids[0]]), "usuário comum não chama bootstrap");
   await db.exec("reset role; set role service_role");
@@ -557,6 +561,16 @@ try {
   await as(0);
   await rpc("staff_update_user", [ids[1], "promote", 0]);
   await as(1);
+  await denied(() => rpc("staff_confirm_email", [rod.id, "ropolatto77@gmail.com"]), "Admin não confirma conta privilegiada");
+  await denied(() => rpc("staff_confirm_email", [unverified, "changed@example.test"]), "confirmação rejeita endereço desatualizado");
+  ok(await rpc("staff_confirm_email", [unverified, "pending@example.test"]), "Admin confirma conta ativa pendente");
+  ok(await rpc("staff_confirm_email", [unverified, "pending@example.test"]) === false, "confirmação repetida é idempotente");
+  const confirmations = (await rpc("staff_audit", [0])).filter(row => row.action === "confirm_email");
+  ok(confirmations.length === 1 && confirmations[0].actor_id === ids[1] &&
+    confirmations[0].target_id === unverified && confirmations[0].new_state.email_confirmed,
+  "confirmação registra autor e conta no histórico uma vez");
+  const [confirmed] = await rpc("staff_users", ["pending@example.test"]);
+  ok(confirmed.email_confirmed_at && !confirmed.can_create_rooms && confirmed.role === "user", "confirmação mantém as permissões da conta");
   await denied(() => rpc("staff_update_user", [rod.id, "block", rod.version]), "Admin não bloqueia SuperAdmin");
   await denied(() => rpc("staff_update_user", [newcomer, "promote", 0]), "Admin não altera cargos");
   await rpc("staff_update_user", [newcomer, "grant_rooms", 0]);

@@ -114,8 +114,30 @@
   background: var(--inset);
   color: inherit;
 }
-.admin-page main { width: min(100%, 1000px); margin: 0 auto; padding: 20px 16px 48px; }
-.admin-page [aria-pressed=true] { border-color: var(--accent); }
+.admin-page {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+.admin-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable both-edges;
+  padding: 20px max(16px, calc((100% - 968px) / 2)) 48px;
+}
+.admin-scroll:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: -2px;
+}
+.admin-identity { min-width: 0; overflow-wrap: anywhere; }
+.admin-page button { min-height: 44px; padding: 8px 14px; }
+.admin-sections svg { flex: none; }
+.admin-sections [aria-pressed=true] {
+  border-color: var(--accent);
+  background: var(--inset);
+  color: var(--accent-text);
+}
 .admin-filters {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr;
@@ -142,11 +164,15 @@
 }
 .admin-list h2 { font-size: 17px; margin: 0; }
 .admin-list p { margin: 5px 0; color: var(--muted); }
-.admin-list dl { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+.admin-list dl { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 10px 0 0; }
+.admin-list dl > div { min-width: 0; max-width: 100%; }
+.admin-list .account-actions, .admin-room-action { margin-top: 14px; }
 .admin-list dt { font-size: 12px; color: var(--muted); }
 .admin-list dd { margin: 3px 0 0; }
 @media (max-width: 560px) {
   .admin-filters { grid-template-columns: 1fr; }
+  .admin-sections > button { flex: 1 1 125px; }
+  .admin-list .account-actions > button { flex: 1 1 auto; }
   .home-header:has(.account-actions), .room-header:has(.account-actions) { flex-wrap: wrap; }
   .account-profile > div { right: auto; left: 0; }
   .account-actions .account-control { min-height: 44px; }

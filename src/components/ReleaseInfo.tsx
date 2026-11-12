@@ -33,8 +33,11 @@ const releases = [
         title: "Conta e administração",
         changes: [
           "Cadastro com confirmação de e-mail, recuperação de senha e opção de permanecer conectado.",
+          "Avisos de acesso distinguem o limite de envio de e-mails do excesso de tentativas e orientam quando usar um link já recebido.",
           "Os links de confirmação de e-mail e recuperação de senha podem voltar ao endereço público do StreamLite, inclusive quando solicitados em um ambiente de testes.",
           "Painel administrativo com pesquisa de usuários, gestão de permissões e histórico de alterações.",
+          "Administradores podem confirmar manualmente o e-mail de contas ativas pendentes para liberar o login com senha. A confirmação fica no histórico.",
+          "Rolagem nas abas de Usuários, Histórico e Salas ativas, com botões mais fáceis de usar em telas pequenas.",
         ],
       },
       {

@@ -49,6 +49,8 @@ export const staffUsers = (search: string, status: string, role: string, offset:
 export const staffAudit = (offset: number) => rpc<AuditEntry[]>("staff_audit", { p_offset: offset });
 export const updateUser = (user: StaffUser, action: string) =>
   rpc("staff_update_user", { p_id: user.id, p_action: action, p_version: user.version });
+export const confirmUserEmail = (user: StaffUser) =>
+  rpc<boolean>("staff_confirm_email", { p_id: user.id, p_email: user.email });
 export const updateOwnUsername = (username: string) =>
   rpc<string>("update_own_username", { p_username: username });
 export const staffRooms = () => rpc<StaffRoom[]>("staff_rooms", {});

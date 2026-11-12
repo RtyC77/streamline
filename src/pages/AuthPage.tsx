@@ -20,8 +20,14 @@ function authError(error: unknown, mode: Mode) {
   if (code === "email_not_confirmed") return "Confirme seu e-mail pelo link enviado no cadastro.";
   if (code === "unexpected_failure" && mode === "register")
     return "Não foi possível criar a conta. Verifique se o nome de usuário está disponível.";
-  if (code === "over_email_send_rate_limit" || code === "over_request_rate_limit")
-    return "Aguarde alguns minutos antes de tentar novamente.";
+  if (code === "over_email_send_rate_limit") {
+    const email = mode === "forgot" ? "de recuperação" : "de confirmação";
+    return `O serviço atingiu o limite de envio de e-mails. Se você já recebeu o link ${email}, use-o. Caso contrário, tente mais tarde.`;
+  }
+  if (code === "email_address_not_authorized")
+    return "O serviço de e-mail não está autorizado a enviar para esse endereço. Avise a administração do StreamLite.";
+  if (code === "over_request_rate_limit")
+    return "O serviço recebeu muitas tentativas desta rede. Aguarde alguns minutos antes de tentar novamente.";
   if (code === "weak_password") return "A senha não atende às regras de segurança.";
   return explain(error);
 }
