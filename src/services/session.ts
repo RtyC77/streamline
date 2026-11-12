@@ -396,7 +396,7 @@ export class RoomSession {
     window.removeEventListener("online", this.onOnline);
     this.peers?.dispose();
     this.cameras?.dispose();
-    await this.signaling?.close();
-    if (voluntary) await this.enqueue(() => leaveRoom(this.state.room.id));
+    const departure = voluntary ? this.enqueue(() => leaveRoom(this.state.room.id)) : undefined;
+    await Promise.all([this.signaling?.close(), departure]);
   }
 }

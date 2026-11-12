@@ -41,7 +41,7 @@ Abra o endereço informado pelo Vite (normalmente `http://127.0.0.1:5173`). Sem 
 6. Em Auth, configure a Site URL de produção. Se usar CAPTCHA, habilite **Cloudflare Turnstile** na proteção contra abuso do Supabase, configure o segredo apenas no painel Auth, e a site key pública em `VITE_TURNSTILE_SITE_KEY`.
 7. No Turnstile, autorize o domínio de produção e o hostname local que você efetivamente usar. Não tente resolver desafios automaticamente.
 8. Configure limites de Auth e monitore abuso. A proteção por conta do banco não substitui a limitação por IP e o CAPTCHA da criação de identidades anônimas. Use um projeto separado para testes automatizados que exigirem CAPTCHA desativado.
-9. Agende a limpeza de salas e identidades antigas conforme `supabase/maintenance.sql`.
+9. Habilite o Supabase Cron e execute `supabase/maintenance.sql` após aplicar as migrations. Uma sala vazia aceita entradas por dez segundos e depois desaparece do catálogo. Quando a saída não chega ao servidor, os dez segundos começam após a presença expirar por falta de heartbeat. O Cron remove os registros vencidos.
 
 Se preferir a CLI, com Supabase CLI instalada no computador de desenvolvimento:
 

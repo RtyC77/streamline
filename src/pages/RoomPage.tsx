@@ -148,8 +148,8 @@ export function RoomPage({
         if (!cancelled) setReady(true);
       })
       .catch(report);
-    const hide = () => {
-      void controller.close();
+    const hide = (event: PageTransitionEvent) => {
+      void controller.close(!event.persisted).catch(() => {});
     };
     window.addEventListener("pagehide", hide);
     const show = (e: PageTransitionEvent) => {

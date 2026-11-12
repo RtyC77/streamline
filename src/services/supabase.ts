@@ -13,16 +13,20 @@ export async function prepareClient(): Promise<SupabaseClient> {
         import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         {
           global: {
-            fetch: (input, options) =>
-              fetch(input, {
+            fetch: (input, options) => {
+              const url = typeof input === "string" || input instanceof URL ? input : input.url;
+              const leavingRoom = options?.method === "POST" && new URL(url).pathname.endsWith("/rest/v1/rpc/leave_room");
+              return fetch(input, {
                 ...options,
+                keepalive: leavingRoom || options?.keepalive,
                 signal: options?.signal
                   ? AbortSignal.any([
                       options.signal,
                       AbortSignal.timeout(15_000),
                     ])
                   : AbortSignal.timeout(15_000),
-              }),
+              });
+            },
           },
         },
       );

@@ -476,6 +476,35 @@ try {
   ok(listedPrivateRoom?.access_mode === 'private' && listedPrivateRoom.participants.some(member => member.nickname === 'Visitante' && member.sharing), 'catálogo anônimo mostra participantes e compartilhamento');
   ok(!JSON.stringify(directory).includes(password) && !JSON.stringify(directory).includes('password_hash') && !JSON.stringify(directory).includes('client_id'), 'catálogo omite credenciais e identificadores de cliente');
   await denied(() => rpc('join_listed_room', [openRoom.room.id, 'Visitante', tabs[6], null]), 'catálogo público não permite ingresso sem identidade Supabase');
+  await db.exec('reset role');
+  await db.exec(await readFile(new URL('../supabase/migrations/202611120010_empty_room_timeout.sql', import.meta.url), 'utf8'));
+  const vacancy = async (roomId) => (await admin(
+    'select extract(epoch from vacancy_deadline-clock_timestamp()) as seconds from public.rooms where id=$1',
+    [roomId],
+  )).rows[0]?.seconds;
+  await as(4);
+  await rpc('leave_room', [openRoom.room.id, tabs[4]]);
+  ok(Number(await vacancy(openRoom.room.id)) > 60, 'saída com outro participante ativo não inicia contagem de sala vazia');
+  await as(5);
+  await rpc('leave_room', [openRoom.room.id, tabs[5]]);
+  const emptySeconds = Number(await vacancy(openRoom.room.id));
+  ok(emptySeconds > 9 && emptySeconds <= 10, 'última saída inicia a janela de dez segundos');
+  await as(6);
+  ok(!(await rpc('join_listed_room', [openRoom.room.id, 'Voltei', tabs[6], null])).error, 'retorno durante a janela mantém a sala aberta');
+  ok(Number(await vacancy(openRoom.room.id)) > 60, 'retorno cancela o prazo da sala vazia');
+  await admin("update public.room_members set last_seen=now()-interval '61 seconds' where room_id=$1", [openRoom.room.id]);
+  const disconnectedSeconds = Number(await vacancy(openRoom.room.id));
+  ok(disconnectedSeconds > 8 && disconnectedSeconds <= 9, 'desconexão sem aviso inicia a janela ao expirar a presença');
+  await admin("update public.room_members set last_seen=now()-interval '71 seconds' where room_id=$1", [openRoom.room.id]);
+  await as(6);
+  await rpc('leave_room', [openRoom.room.id, tabs[6]]);
+  ok(Number(await vacancy(openRoom.room.id)) < 0, 'saída atrasada de membro expirado não reabre a sala');
+  await as(5);
+  ok(!!(await rpc('join_listed_room', [openRoom.room.id, 'Tarde', tabs[5], null])).error, 'prazo vencido impede entrada mesmo antes da limpeza');
+  await db.exec('reset role; set role anon');
+  ok(!(await rpc('list_rooms', [50, 0])).some(room => room.id === openRoom.room.id), 'prazo vencido oculta sala do catálogo');
+  await admin('delete from public.rooms where vacancy_deadline<=statement_timestamp()');
+  ok(await vacancy(openRoom.room.id) === undefined && Number(await vacancy(lockedRoom.room.id)) > 0, 'limpeza remove sala vencida e preserva sala ocupada');
   console.log(
     `\n${checks} verificações SQL passaram em PostgreSQL WASM (PGlite). Realtime gerenciado exige teste separado.`,
   );

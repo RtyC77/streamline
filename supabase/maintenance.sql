@@ -1,5 +1,9 @@
 -- Execute as postgres in SQL Editor. Enable the Supabase Cron integration first.
 -- Re-running replaces this named schedule rather than creating duplicates.
+select cron.schedule('streamlite-empty-rooms', '10 seconds', $job$
+  delete from public.rooms where vacancy_deadline<=statement_timestamp();
+$job$);
+
 select cron.schedule('streamlite-cleanup', '*/15 * * * *', $job$
   delete from public.rooms where expires_at < now();
   delete from private.attempts where window_start < now()-interval '1 day';
