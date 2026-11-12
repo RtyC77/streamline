@@ -1,8 +1,9 @@
 import { PGlite } from "@electric-sql/pglite";
+import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
 import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-const db = new PGlite();
+const db = new PGlite({ extensions: { pgcrypto } });
 let checks = 0;
 const ok = (value, message) => {
   assert.ok(value, message);
@@ -452,6 +453,29 @@ try {
   await as(8);await denied(()=>rpc('room_pulse',[multi.room.id,tabs[8],null]),'heartbeat não ressuscita associação expirada');
   await db.exec('reset role;set role service_role');await rpc('admin_close_room',[multi.room.id]);
   ok((await admin('select * from public.room_streams where room_id=$1',[multi.room.id])).rows.length===0,'administrador finaliza todas as transmissões da sala');
+  await db.exec('reset role');
+  await db.exec(await readFile(new URL('../supabase/migrations/202611120009_room_directory.sql', import.meta.url), 'utf8'));
+  await admin('delete from private.attempts');
+  await as(4);
+  const openRoom = await rpc('create_listed_room', ['Pública', tabs[4], 2, 'public', null]);
+  const password = 'senha de teste';
+  const lockedRoom = await rpc('create_listed_room', ['Privada', tabs[4], 2, 'private', password]);
+  ok(openRoom.room && lockedRoom.room && !lockedRoom.invite, 'criação aceita os dois modos sem emitir convite legado');
+  await as(5);
+  ok(!(await rpc('join_listed_room', [openRoom.room.id, 'Visitante', tabs[5], null])).error, 'sala pública aceita entrada sem senha');
+  for (const attempt of [null, 'incorreta'])
+    ok((await rpc('join_listed_room', [lockedRoom.room.id, 'Visitante', tabs[5], attempt])).error?.includes('Senha'), 'sala privada recusa senha ausente ou incorreta');
+  ok(!(await rpc('join_listed_room', [lockedRoom.room.id, 'Visitante', tabs[5], password])).error, 'sala privada aceita senha correta');
+  await rpc('claim_stream', [lockedRoom.room.id, tabs[5]]);
+  await as(6);
+  ok((await rpc('join_listed_room', [lockedRoom.room.id, 'Excedente', tabs[6], password])).error?.includes('2 participantes'), 'entrada por senha respeita a capacidade');
+  ok(!!(await rpc('join_listed_room', [large.room.id, 'Excedente', tabs[6], null])).error, 'UUID de sala antiga não substitui o convite');
+  await db.exec('reset role; set role anon');
+  const directory = await rpc('list_rooms', [50, 0]);
+  const listedPrivateRoom = directory.find(room => room.id === lockedRoom.room.id);
+  ok(listedPrivateRoom?.access_mode === 'private' && listedPrivateRoom.participants.some(member => member.nickname === 'Visitante' && member.sharing), 'catálogo anônimo mostra participantes e compartilhamento');
+  ok(!JSON.stringify(directory).includes(password) && !JSON.stringify(directory).includes('password_hash') && !JSON.stringify(directory).includes('client_id'), 'catálogo omite credenciais e identificadores de cliente');
+  await denied(() => rpc('join_listed_room', [openRoom.room.id, 'Visitante', tabs[6], null]), 'catálogo público não permite ingresso sem identidade Supabase');
   console.log(
     `\n${checks} verificações SQL passaram em PostgreSQL WASM (PGlite). Realtime gerenciado exige teste separado.`,
   );

@@ -25,8 +25,32 @@ export function parseInvite(input: string): string {
   return token;
 }
 export function inviteLink(token: string) {
-  return `${location.origin}/#convite=${token}`;
+  return `${location.origin}/#${isRoomId(token) ? "sala" : "convite"}=${token}`;
 }
+export const isRoomId = (value: string) =>
+  /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(value);
+
+export interface ListedRoom {
+  id: string;
+  name: string;
+  access_mode: "public" | "private" | "invite";
+  max_members: number;
+  participants: { nickname: string; sharing: boolean }[];
+}
+
+export const listRooms = (offset: number) =>
+  rpc<ListedRoom[]>("list_rooms", { p_limit: 26, p_offset: offset });
+
+export const createListedRoom = (nickname: string, capacity: number, access: "public" | "private", password: string) =>
+  rpc<Entry>("create_listed_room", {
+    p_nickname: nickname.trim(), p_client: tabId(), p_max_members: capacity,
+    p_access: access, p_password: access === "private" ? password : null,
+  });
+
+export const joinListedRoom = (room: string, nickname: string, password: string) =>
+  rpc<Entry>("join_listed_room", {
+    p_room: room, p_nickname: nickname.trim(), p_client: tabId(), p_password: password || null,
+  });
 export async function rpc<T>(
   name: string,
   args: Record<string, unknown>,

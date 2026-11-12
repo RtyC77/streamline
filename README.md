@@ -57,6 +57,10 @@ As RPCs `SECURITY DEFINER` têm `search_path` vazio, usam `auth.uid()`, validam 
 
 ## 3. Criar e usar uma sala
 
+A página inicial lista as salas ativas, os apelidos dos participantes e quem está compartilhando a tela. Salas públicas aceitam entrada sem senha. Para criar uma sala privada, escolha **Privada** e defina uma senha. O link da sala abre o formulário de entrada e o servidor valida a senha. Salas criadas antes do catálogo continuam aceitando seus convites originais.
+
+Para publicar o catálogo, aplique a migration `202611120009_room_directory.sql` no Supabase antes de publicar o frontend. Ela usa `pgcrypto` no schema `extensions` para armazenar hashes de senha.
+
 1. Digite um apelido de 2 a 24 caracteres e clique em **Criar sala**.
 2. Copie o convite na barra lateral e envie-o aos amigos por um canal de sua confiança.
 3. Cada amigo abre o link, escolhe um apelido e clica em **Entrar na sala**.
