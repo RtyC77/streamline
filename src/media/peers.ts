@@ -10,6 +10,7 @@ interface Peer {
  iceTimer:ReturnType<typeof setTimeout>|null; counters:Map<string,Counter>;
  created:number; retries:number; restartAt:number; bitrate:number; negotiating:boolean; data:RTCDataChannel|null;
  timing:SwitchTiming;
+ economy:boolean; tuning:Promise<void>;
 }
 export class Peers {
  private peers=new Map<string,Peer>();
@@ -21,6 +22,8 @@ export class Peers {
  private poster:string|null=null;
  private previews=new Set<string>();
  private profile:CaptureProfile=defaultProfile;
+ private economy=false;
+ private qualityPending=false;
  private disposed=false;
  private queues=new Map<string,Promise<void>>();
  private switching=false;
@@ -92,7 +95,32 @@ export class Peers {
   if(this.disposed||!selected||this.failedSelection===selected.session_id)return;
   const existing=this.peers.get(this.key(selected.broadcaster_id,false));if(existing&&!existing.preview)return;
   const p=this.create(selected.broadcaster_id,crypto.randomUUID(),selected.session_id,false);this.armSelection(p);this.emit();
-  void this.send(this.envelope(p,{kind:'watch'})).catch(error=>{if(this.current(p)){this.failSelection(p);this.warn(error);}});
+  void this.send(this.envelope(p,{kind:'watch',economy:this.economy})).catch(error=>{if(this.current(p)){this.failSelection(p);this.warn(error);}});
+ }
+ setEconomy(enabled:boolean){
+  this.economy=enabled;
+  this.qualityPending=true;
+ }
+ private async sendQuality(){
+  const p=[...this.peers.values()].find(peer=>!peer.outgoing&&!peer.preview&&peer.session===this.selected);
+  if(!p||!this.qualityPending)return;
+  this.qualityPending=false;
+  try{await this.send(this.envelope(p,{kind:'viewer-quality',economy:this.economy}));}
+  catch{this.qualityPending=true;}
+ }
+ private outgoingProfile(p:Peer):CaptureProfile{
+  return p.economy?{...this.profile,resolution:480,fps:24}:this.profile;
+ }
+ private bitrateLimits(p:Peer){
+  const profile=videoProfile(this.outgoingProfile(p));
+  return p.economy?{bitrate:800_000,minBitrate:400_000}:profile;
+ }
+ private tunePeer(p:Peer){
+  p.tuning=p.tuning.then(async()=>{
+   if(!this.current(p)||!p.pc.remoteDescription)return;
+   await Promise.all(p.pc.getSenders().map(sender=>tuneSender(sender,p.bitrate,this.outgoingProfile(p))));
+  }).catch(()=>{if(this.current(p))this.warn(new Error('O navegador não aceitou todos os limites do encoder. Confira o diagnóstico.'));});
+  return p.tuning;
  }
  setSnapshot(snapshot:Snapshot){
   if(this.disposed)return;this.snapshot=snapshot;const streams=activeStreams(snapshot);
@@ -136,7 +164,7 @@ export class Peers {
  }
  private create(id:string,connection:string,session:string,outgoing:boolean,preview=false):Peer{
   const key=this.key(id,outgoing);this.close(key);const pc=new RTCPeerConnection(this.config);
-  const p:Peer={pc,id,outgoing,preview,connection,session,ice:[],pending:[],iceTimer:null,counters:new Map(),created:Date.now(),retries:0,restartAt:0,bitrate:videoProfile(this.profile).bitrate,negotiating:false,data:null,timing:{requestedMs:0}};
+  const p:Peer={pc,id,outgoing,preview,connection,session,ice:[],pending:[],iceTimer:null,counters:new Map(),created:Date.now(),retries:0,restartAt:0,bitrate:videoProfile(this.profile).bitrate,negotiating:false,data:null,timing:{requestedMs:0},economy:false,tuning:Promise.resolve()};
   this.peers.set(key,p);
   pc.onicecandidate=e=>{
    if(this.peers.get(key)!==p)return;
@@ -187,7 +215,10 @@ export class Peers {
    if(signal.kind==='watch'){
     if(!this.stream||this.localSession!==signal.session||!streams.some(s=>s.broadcaster_id===this.self&&s.session_id===signal.session))return;
     const existing=this.peers.get(this.key(id,true));if(existing?.connection===signal.connection)return;
-    const p=this.create(id,signal.connection,signal.session,true,signal.preview===true);await this.offer(p);return;
+    const p=this.create(id,signal.connection,signal.session,true,signal.preview===true);
+    p.economy=signal.economy===true;
+    p.bitrate=this.bitrateLimits(p).bitrate;
+    await this.offer(p);return;
    }
    if(signal.kind==='unwatch'){
     const p=this.peers.get(this.key(id,true));if(p?.connection===signal.connection&&p.session===signal.session)this.close(this.key(id,true));return;
@@ -195,7 +226,13 @@ export class Peers {
    const outgoing=signal.session===this.localSession;
    if(!streams.some(s=>s.session_id===signal.session&&s.broadcaster_id===(outgoing?this.self:id)))return;
    const p=this.peers.get(this.key(id,outgoing));if(!p||p.connection!==signal.connection||p.session!==signal.session)return;
-   if(signal.kind==='ice'||signal.kind==='ice-batch'){
+   if(signal.kind==='viewer-quality'){
+    if(outgoing&&!p.preview&&p.economy!==signal.economy){
+     p.economy=signal.economy;
+     p.bitrate=Math.min(p.bitrate,this.bitrateLimits(p).bitrate);
+     await this.tunePeer(p);
+    }
+   }else if(signal.kind==='ice'||signal.kind==='ice-batch'){
     const candidates=signal.kind==='ice'?[signal.candidate]:signal.candidates;
     for(const c of candidates)if(p.pc.remoteDescription)await p.pc.addIceCandidate(c);else if(p.ice.length<64)p.ice.push(c);
    }else if(signal.kind==='offer'&&!outgoing){
@@ -206,7 +243,7 @@ export class Peers {
     await p.pc.setLocalDescription(answer);if(this.current(p)&&p.pc.localDescription?.sdp)await this.send(this.envelope(p,{kind:'answer',sdp:p.pc.localDescription.sdp}));
    }else if(signal.kind==='answer'&&outgoing&&p.pc.signalingState==='have-local-offer'){
     await p.pc.setRemoteDescription({type:'answer',sdp:signal.sdp});if(!this.current(p))return;await this.drain(p);if(!this.current(p))return;
-    if(!p.preview)await Promise.all(p.pc.getSenders().map(s=>tuneSender(s,p.bitrate,this.profile).catch(()=>this.warn(new Error('O navegador não aceitou todos os limites do encoder. Confira o diagnóstico.')))));
+    if(!p.preview)await this.tunePeer(p);
    }
   }).catch(e=>{if(!this.disposed)this.warn(e);});
   this.queues.set(queueKey,task);void task.then(()=>{if(this.queues.get(queueKey)===task)this.queues.delete(queueKey);});
@@ -217,6 +254,7 @@ export class Peers {
    const streams=activeStreams(this.snapshot);
    for(const [key,p]of this.peers)if(p.preview&&Date.now()-p.created>15_000)this.close(key);
    this.connectSelected();
+   if(this.qualityPending)await this.sendQuality();
    // One temporary data-only connection at a time, once per unseen session.
    if(![...this.peers.values()].some(p=>!p.outgoing&&p.preview)){
     const next=streams.find(s=>s.broadcaster_id!==this.self&&s.session_id!==this.selected&&!this.previews.has(s.session_id));
@@ -242,9 +280,9 @@ export class Peers {
     const m=await collectStats(p.pc,p.id,p.counters);
     m.connection=p.connection;
     if(p.outgoing&&p.pc.connectionState==='connected'){
-     const target=videoProfile(this.profile),congested=m.limitation==='bandwidth'||(m.rtt??0)>0.35;
+     const target=this.bitrateLimits(p),congested=m.limitation==='bandwidth'||(m.rtt??0)>0.35;
      const next=congested?Math.max(target.minBitrate,p.bitrate-200_000):Math.min(target.bitrate,p.bitrate+100_000);
-     if(next!==p.bitrate){p.bitrate=next;await Promise.all(p.pc.getSenders().map(s=>tuneSender(s,next,this.profile).catch(()=>undefined)));}
+     if(next!==p.bitrate){p.bitrate=next;await this.tunePeer(p);}
     }return m;
    }));if(!this.disposed&&diagnostics)this.metrics(metrics);
   }catch{/* Closing peers can invalidate stats. */}finally{this.statisticsRunning=false;}

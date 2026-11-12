@@ -790,6 +790,10 @@ h2 {
   gap: 8px;
   color: #8c9ba9;
 }
+.viewer-economy[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .volume input {
   width: 75px;
   padding: 0;

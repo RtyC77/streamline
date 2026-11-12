@@ -26,7 +26,8 @@ export interface Entry extends Snapshot {
   invite?: string;
 }
 export type SignalBody =
-  | { kind: "watch"; preview?: boolean }
+  | { kind: "watch"; preview?: boolean; economy?: boolean }
+  | { kind: "viewer-quality"; economy: boolean }
   | { kind: "unwatch" }
   | { kind: "ice-batch"; candidates: RTCIceCandidateInit[] }
   | { kind: "offer" | "answer"; sdp: string }

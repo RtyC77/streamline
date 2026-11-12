@@ -37,6 +37,7 @@ export class RoomSession {
   private busy = false;
   private closed = false;
   private connected = false;
+  private viewerEconomy?: boolean;
   private lastPulse = Date.now();
   private session: string | null = null;
   private online = new Set<string>();
@@ -119,6 +120,7 @@ export class RoomSession {
       },
       (ready) => {
         this.connected = ready;
+        if (ready && this.viewerEconomy !== undefined) this.peers?.setEconomy(this.viewerEconomy);
         this.cameras?.setConnected(ready);
         this.callbacks.connection(ready ? "Conectado" : "Reconectando");
         if (ready) void this.tick();
@@ -339,6 +341,11 @@ export class RoomSession {
   watch(session:string){
     if(this.closed||!this.connected)return false;
     return this.peers?.requestSelect(session)??false;
+  }
+  setViewerEconomy(enabled: boolean) {
+    this.viewerEconomy = enabled;
+    this.peers?.setEconomy(enabled);
+    if (this.connected) void this.peers?.maintain().catch(this.callbacks.error);
   }
   firstFrame(session:string,stream:MediaStream){if(!this.closed)this.peers?.firstFrame(session,stream);}
   rememberPreview(session:string,image:string){this.peers?.rememberPreview(session);this.callbacks.preview?.(session,image);}

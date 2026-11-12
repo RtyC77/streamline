@@ -124,6 +124,34 @@ beforeEach(() => {
 });
 afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();});
 describe("Negociação por espectador", () => {
+  it("aplica o modo econômico apenas à conexão solicitante e restaura o perfil ao desativar", async () => {
+    const second = crypto.randomUUID(), secondClient = crypto.randomUUID();
+    const {manager} = setup(host, hc);
+    const stream = new FakeStream();
+    const track = new FakeTrack();
+    stream.addTrack(track);
+    manager.setSnapshot({...snapshot,members:[...snapshot.members,{user_id:second,nickname:"Outro",client_id:secondClient}]});
+    manager.setLocal(stream as unknown as MediaStream,sid,"Sem áudio");
+    const firstEnvelope = {to:host,session:sid,connection:crypto.randomUUID(),client:vc};
+    const secondEnvelope = {to:host,session:sid,connection:crypto.randomUUID(),client:secondClient};
+    manager.receive(viewer,{...firstEnvelope,kind:"watch",economy:true});
+    manager.receive(second,{...secondEnvelope,kind:"watch"});
+    await flush();
+    const firstTune = vi.fn(async () => undefined), secondTune = vi.fn(async () => undefined);
+    for (const [pc,tune] of [[FakePC.all[0],firstTune],[FakePC.all[1],secondTune]] as const) {
+      Object.assign(pc,{getSenders:()=>[{track,getParameters:()=>({encodings:[{}]}),setParameters:tune}]});
+    }
+    manager.receive(viewer,{...firstEnvelope,kind:"answer",sdp:"answer"});
+    manager.receive(second,{...secondEnvelope,kind:"answer",sdp:"answer"});
+    await flush();
+    expect(firstTune).toHaveBeenLastCalledWith(expect.objectContaining({encodings:[expect.objectContaining({maxBitrate:800_000,maxFramerate:24,scaleResolutionDownBy:2.25})]}));
+    expect(secondTune).toHaveBeenLastCalledWith(expect.objectContaining({encodings:[expect.objectContaining({maxBitrate:3_000_000,maxFramerate:30})]}));
+    manager.receive(viewer,{...firstEnvelope,kind:"viewer-quality",economy:false});
+    await flush();
+    expect(firstTune).toHaveBeenLastCalledWith(expect.objectContaining({encodings:[expect.objectContaining({maxFramerate:30,scaleResolutionDownBy:1.5})]}));
+    expect(secondTune).toHaveBeenCalledTimes(1);
+    manager.dispose();
+  });
   it('inicia a troca durante manutenção pendente e bloqueia novos cliques até o primeiro quadro',async()=>{
     const other=crypto.randomUUID(),third=crypto.randomUUID(),s2=crypto.randomUUID(),s3=crypto.randomUUID();let release!:()=>void;
     const messages:Signal[]=[],states:MediaState[]=[];

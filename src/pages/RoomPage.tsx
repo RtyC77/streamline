@@ -59,6 +59,7 @@ export function RoomPage({
   const [settings, setSettings] = useState(false);
   const [diagnostics, setDiagnostics] = useState(false);
   const [volume, setVolume] = useState(0.8);
+  const [viewerEconomy, setViewerEconomy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
   const [kicking, setKicking] = useState<string | null>(null);
@@ -435,6 +436,19 @@ export function RoomPage({
                 disabled={!media.remote}
               />
             </div>
+            <button
+              type="button"
+              className="secondary viewer-economy"
+              aria-pressed={viewerEconomy}
+              title="Solicita até 480p, 24 FPS e 800 kbps para as telas que você assiste"
+              onClick={() => {
+                const enabled = !viewerEconomy;
+                setViewerEconomy(enabled);
+                session.current?.setViewerEconomy(enabled);
+              }}
+            >
+              Modo econômico
+            </button>
           </div>
           <div className="secondary-actions">
             <button
