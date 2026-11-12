@@ -46,6 +46,9 @@ export function RoomPage({
   const [connection, setConnection] = useState("Conectando");
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sidebarClose = useRef<HTMLButtonElement>(null);
+  const sidebarToggle = useRef<HTMLButtonElement>(null);
   const [connectionNotice, setConnectionNotice] = useState("");
   const [notice, setNotice] = useState("");
   const [sharingBusy, setSharingBusy] = useState(false);
@@ -69,6 +72,13 @@ export function RoomPage({
   const session = useRef<RoomSession | null>(null);
   const stage = useRef<HTMLDivElement>(null);
   const report = useCallback((e: unknown) => setError(explain(e)), []);
+  const closeSidebar = () => {
+    setSidebarOpen(false);
+    sidebarToggle.current?.focus();
+  };
+  useEffect(() => {
+    if (sidebarOpen) sidebarClose.current?.focus();
+  }, [sidebarOpen]);
   useEffect(() => {
     if (!media.connectionIssue) return;
     setConnectionNotice(media.connectionIssue);
@@ -174,7 +184,13 @@ export function RoomPage({
   };
   return (
     <div className="room-layout">
-      <aside className="sidebar">
+      <aside id="room-sidebar" className={`sidebar${sidebarOpen ? " sidebar-open" : ""}`}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && sidebarOpen) closeSidebar();
+        }}>
+        <button ref={sidebarClose} className="secondary sidebar-close" onClick={closeSidebar}>
+          Fechar detalhes
+        </button>
         <div className="sidebar-brand">
           <Brand />
         </div>
@@ -280,6 +296,11 @@ export function RoomPage({
       </aside>
       <main className="room-main">
         <header className="room-header">
+          <button ref={sidebarToggle} className="secondary sidebar-toggle"
+            aria-expanded={sidebarOpen} aria-controls="room-sidebar"
+            onClick={() => setSidebarOpen(!sidebarOpen)}>
+            Detalhes da sala
+          </button>
           <AdminEntry/>
           <span className="p2p-badge">
             <span className="status-dot" />
@@ -431,48 +452,50 @@ export function RoomPage({
               <Icon name="settings" />
             </button>
             <span className="control-divider" />
-            <button className="leave-button" onClick={() => void leave()}>
+            <button className="leave-button" aria-label="Sair da sala" onClick={() => void leave()}>
               <Icon name="exit" size={18} />
               <span>Sair da sala</span>
             </button>
           </div>
         </div>
         {connectionNotice && <div className="notice connection-toast" role="alert">{connectionNotice}</div>}
-        {error && (
-          <div className="error room-message" role="alert">
-            <span>{error}</span>
-            <button
-              className="icon-button"
-              onClick={() => setError("")}
-              aria-label="Dispensar erro"
-            >
-              <Icon name="close" size={16} />
-            </button>
+        <div className="room-details">
+          {error && (
+            <div className="error room-message" role="alert">
+              <span>{error}</span>
+              <button
+                className="icon-button"
+                onClick={() => setError("")}
+                aria-label="Dispensar erro"
+              >
+                <Icon name="close" size={16} />
+              </button>
+            </div>
+          )}
+          {notice && (
+            <div className="notice room-message" role="status">
+              {notice}
+            </div>
+          )}
+          {!captureSupported() && (
+            <div className="notice">
+              Para compartilhar, use Chrome ou Edge atualizado em HTTPS ou
+              localhost.
+            </div>
+          )}
+          {diagnostics && (
+            <Diagnostics metrics={metrics} members={snapshot.members} switchTiming={media.switchTiming}/>
+          )}
+          <div className="room-footnote">
+            <Icon name="screen" size={16} />
+            <p>
+              Mais jogo, menos consumo.
+              <span>
+                {" "}
+                Uma tela ao vivo por vez. As demais usam apenas imagens congeladas.
+              </span>
+            </p>
           </div>
-        )}
-        {notice && (
-          <div className="notice room-message" role="status">
-            {notice}
-          </div>
-        )}
-        {!captureSupported() && (
-          <div className="notice">
-            Para compartilhar, use Chrome ou Edge atualizado em HTTPS ou
-            localhost.
-          </div>
-        )}
-        {diagnostics && (
-          <Diagnostics metrics={metrics} members={snapshot.members} switchTiming={media.switchTiming}/>
-        )}
-        <div className="room-footnote">
-          <Icon name="screen" size={16} />
-          <p>
-            Mais jogo, menos consumo.
-            <span>
-              {" "}
-              Uma tela ao vivo por vez. As demais usam apenas imagens congeladas.
-            </span>
-          </p>
         </div>
       </main>
       {shareOptions&&<ShareOptions initial={profile} onClose={()=>setShareOptions(false)} onShare={requested=>void share(requested)}/>}

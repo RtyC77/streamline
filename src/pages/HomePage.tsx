@@ -60,9 +60,9 @@ export function HomePage({
             <span /> UM BOM JOGO FICA MELHOR JUNTO
           </div>
           <h1>
-            Seu jogo na tela.
+            Seu jogo na tela.{" "}
             <br />
-            Seus amigos
+            Seus amigos{" "}
             <br />
             <span>por perto.</span>
           </h1>
