@@ -522,10 +522,45 @@ h2 {
   list-style: none;
 }
 .participants li {
+  --participant-avatar-size: 35px;
   display: flex;
   align-items: center;
   gap: 11px;
   padding: 11px 0;
+}
+.participants .avatar {
+  width: var(--participant-avatar-size);
+  height: var(--participant-avatar-size);
+}
+.participants .camera-avatar {
+  width: calc(var(--participant-avatar-size) * 2);
+  height: calc(var(--participant-avatar-size) * 2);
+}
+.camera-avatar video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.camera-play {
+  position: absolute;
+  inset: 0;
+  padding: 2px;
+  font: inherit;
+  color: inherit;
+  background: #15181f;
+  border: 1px solid currentColor;
+  border-radius: inherit;
+  overflow-wrap: anywhere;
+}
+.camera-toggle {
+  margin-top: 8px;
+}
+.camera-error {
+  margin: 8px 0 0;
+  color: #ffaeae;
+  font-size: 12px;
+  line-height: 1.4;
 }
 .avatar {
   position: relative;
@@ -1079,17 +1114,20 @@ dialog > .muted {
     padding-top: 10px;
   }
   .participants li {
+    --participant-avatar-size: 29px;
     padding: 5px 10px 5px 0;
   }
-  .participants li > div > span {
+  .participants li:not(:has(.camera-avatar)) > div > span:not(.camera-message) {
     display: none;
+  }
+  .participants li:has(.camera-avatar, .camera-message) {
+    min-width: 0;
+    flex: 1 1 100%;
   }
   .participants .empty-seat {
     display: none;
   }
   .participants .avatar {
-    width: 29px;
-    height: 29px;
     font-size: 9px;
   }
   .room-header h1 {

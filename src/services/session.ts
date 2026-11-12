@@ -1,7 +1,8 @@
 import type { CaptureInfo } from "../media/capture";
 import {firstStill} from '../media/still';
 import { Peers } from "../media/peers";
-import type { MediaState, PeerMetric, Snapshot } from "../types";
+import { Cameras } from "../media/cameras";
+import type { CameraView, MediaState, PeerMetric, Snapshot } from "../types";
 import {activeStreams} from '../types';
 import { claimStream, leaveRoom, pulse, releaseStream, tabId } from "./rooms";
 import { kickMember } from "./rooms";
@@ -20,10 +21,13 @@ export interface SessionCallbacks {
   error: (e: unknown) => void;
   connection: (s: string) => void;
   expired?: (message: string) => void;
+  cameras?: (views: Record<string, CameraView>) => void;
+  cameraError?: (message: string) => void;
 }
 export class RoomSession {
   private signaling: Signaling | null = null;
   private peers: Peers | null = null;
+  private cameras: Cameras | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private nextPulseAt = 0;
   private lastStatsAt = 0;
@@ -65,7 +69,7 @@ export class RoomSession {
     if (typeof document !== "undefined")
       this.background = new BackgroundTimeout(
         document,
-        () => this.session !== null || this.starting,
+        () => this.session !== null || this.starting || this.cameras?.capturing === true,
         () => {
           this.callbacks.connection("Saindo por inatividade");
           void this.close(true)
@@ -87,16 +91,35 @@ export class RoomSession {
       this.callbacks.error,
       (session,image)=>this.callbacks.preview?.(session,image),
     );
+    this.cameras = new Cameras(
+      this.self,
+      tabId(),
+      config,
+      (signal) => this.signaling!.send(signal),
+      (session) => {
+        this.signaling?.setCamera(session);
+        this.background?.refresh();
+      },
+      (views) => this.callbacks.cameras?.(views),
+      (message) => this.callbacks.cameraError?.(message),
+    );
     this.signaling = new Signaling(
       this.state.room.id,
       this.self,
-      (id, s) => this.peers?.receive(id, s),
+      (id, s) => {
+        if (s.media === "camera") this.cameras?.receive(id, s);
+        else this.peers?.receive(id, s);
+      },
       (id, online) => {
         if (online) this.online.add(id);
-        else if (this.online.delete(id)) this.peers?.departed(id);
+        else if (this.online.delete(id)) {
+          this.peers?.departed(id);
+          this.cameras?.remove(id);
+        }
       },
       (ready) => {
         this.connected = ready;
+        this.cameras?.setConnected(ready);
         this.callbacks.connection(ready ? "Conectado" : "Reconectando");
         if (ready) void this.tick();
       },
@@ -104,6 +127,8 @@ export class RoomSession {
       () => {
         this.nextPulseAt = Math.min(this.nextPulseAt, Date.now() + 1000);
       },
+      (id, session, clientId) => this.cameras?.presence(id, session, clientId),
+      (success) => this.cameras?.publication(success),
     );
     await this.enqueue(async () => {
       if (this.closed) return;
@@ -135,11 +160,18 @@ export class RoomSession {
       ) {
         this.interrupted = true;
         this.stopCapture();
+        if (this.cameras?.capturing) {
+          this.cameras.stop();
+          this.callbacks.cameraError?.("A câmera foi desligada porque a conexão com a sala foi interrompida.");
+        }
         this.session = null;
         this.callbacks.connection("Conexão interrompida");
       }
-      if (this.connected)
+      if (this.connected) {
         void this.peers?.maintain().catch(this.callbacks.error);
+        this.cameras?.maintain();
+        void this.signaling?.publishCamera();
+      }
       if (
         now - this.lastStatsAt >=
         (this.diagnostics ? cadence.diagnostics : cadence.adaptation)
@@ -160,9 +192,11 @@ export class RoomSession {
     }
     if (this.applied && sameSnapshot(this.state, state)) return;
     this.applied = true;
+    const epochChanged = this.state.room.channel_epoch !== state.room.channel_epoch;
     this.state = state;
     this.callbacks.snapshot(state);
     this.peers?.setSnapshot(state);
+    this.cameras?.setMembers(state.members, epochChanged);
     await this.signaling?.sync(state.members, state.room.channel_epoch);
     if (this.connected) await this.peers?.maintain();
   }
@@ -185,7 +219,9 @@ export class RoomSession {
           import.meta.env.VITE_TURN_FUNCTION &&
           Date.now() - this.iceRefreshed > 20 * 60_000
         ) {
-          this.peers?.configure(await iceConfiguration(this.state.room.id));
+          const config = await iceConfiguration(this.state.room.id);
+          this.peers?.configure(config);
+          this.cameras?.configure(config);
           this.iceRefreshed = Date.now();
         }
         this.callbacks.connection(
@@ -292,6 +328,14 @@ export class RoomSession {
     void this.signaling?.notifyChange().catch(this.callbacks.error);
     if (!this.closed) await this.tick(true);
   }
+  async startCamera() {
+    if (this.closed || !this.cameras)
+      throw new Error("Aguarde a conexão com a sala para ativar a câmera.");
+    await this.cameras.start();
+  }
+  stopCamera() {
+    this.cameras?.stop();
+  }
   watch(session:string){
     if(this.closed||!this.connected)return false;
     return this.peers?.requestSelect(session)??false;
@@ -313,6 +357,7 @@ export class RoomSession {
     if (this.timer) clearInterval(this.timer);
     window.removeEventListener("online", this.onOnline);
     this.peers?.dispose();
+    this.cameras?.dispose();
     await this.signaling?.close();
     if (voluntary) await this.enqueue(() => leaveRoom(this.state.room.id));
   }

@@ -5,6 +5,7 @@ import type { Member, Signal } from "../types";
 export function parseSignal(value: unknown): Signal | null {
   if (!value || typeof value !== "object") return null;
   const m = value as Record<string, unknown>;
+  if (m.media !== undefined && m.media !== "camera") return null;
   if (
     !["to", "session", "connection", "client"].every(
       (k) => typeof m[k] === "string" && /^[a-f0-9-]{36}$/.test(m[k] as string),
@@ -39,6 +40,11 @@ export class Signaling {
   private closed = false;
   private epoch = "";
   private lastRefresh = 0;
+  private camera: string | null = null;
+  private cameraPublished = false;
+  private selfClient: string | undefined;
+  private memberClients = new Map<string, string>();
+  private publication = 0;
   private counts = new Map<string, { start: number; count: number }>();
   constructor(
     private room: string,
@@ -48,15 +54,20 @@ export class Signaling {
     private status: (ready: boolean) => void,
     private fail: (error: unknown) => void = () => undefined,
     private changed: () => void = () => undefined,
+    private cameraChanged: (sender: string, session: string | null, clientId: string | null) => void = () => undefined,
+    private cameraPublication: (success: boolean) => void = () => undefined,
   ) {}
   async sync(members: Member[], epoch: string) {
     if (this.closed) return;
+    this.selfClient ??= members.find(member => member.user_id === this.self)?.client_id;
+    this.memberClients = new Map(members.map(member => [member.user_id, member.client_id]));
     if (this.epoch !== epoch) {
+      const wasReady = this.ready.has(this.self);
       this.epoch = epoch;
       const previous = [...this.channels.values()];
       this.channels.clear();
       this.ready.clear();
-      this.status(false);
+      if (wasReady) this.status(false);
       await Promise.all(
         previous.map((channel) => client().removeChannel(channel)),
       );
@@ -71,7 +82,11 @@ export class Signaling {
       }
     for (const member of members) {
       const id = member.user_id;
-      if (this.channels.has(id)) continue;
+      const existing = this.channels.get(id);
+      if (existing) {
+        if (id !== this.self) this.readCamera(id, existing);
+        continue;
+      }
       const channel = client().channel(
         `room:${this.room}:${this.epoch}:user:${id}`,
         {
@@ -113,18 +128,19 @@ export class Signaling {
       channel.on("presence", { event: "sync" }, () => {
         if (this.closed || this.channels.get(id) !== channel) return;
         // Only the owner of this topic can publish presence. Ignore payload identity.
-        const online = Object.values(channel.presenceState()).some(
-          (values) => values.length > 0,
-        );
+        const presence = Object.values(channel.presenceState()).flat();
+        const online = presence.length > 0;
         if (online !== seenOnline) this.presence(id, online);
         seenOnline = online;
+        if (id !== this.self) this.readCamera(id, channel);
       });
       channel.subscribe((state) => {
         if (this.closed || this.channels.get(id) !== channel) return;
         if (state === "SUBSCRIBED") {
           this.ready.add(id);
           if (id === this.self) {
-            void channel.track({ online: true });
+            this.cameraPublished = false;
+            void this.publishCamera();
             this.status(true);
           }
         } else {
@@ -139,6 +155,34 @@ export class Signaling {
         }
       });
     }
+  }
+  private readCamera(id: string, channel: RealtimeChannel) {
+    const clientId = this.memberClients.get(id);
+    const presence = Object.values(channel.presenceState<{ camera?: string; client?: string }>()).flat();
+    const current = presence.reverse().find(item => item.client === clientId);
+    const camera = current?.camera;
+    this.cameraChanged(id, typeof camera === "string" && /^[a-f0-9-]{36}$/.test(camera) ? camera : null, current?.client ?? null);
+  }
+  setCamera(session: string | null) {
+    this.camera = session;
+    this.cameraPublished = false;
+    void this.publishCamera();
+  }
+  async publishCamera() {
+    const channel = this.channels.get(this.self);
+    if (!channel || !this.ready.has(this.self) || this.closed || this.cameraPublished) return;
+    const camera = this.camera;
+    const publication = ++this.publication;
+    this.cameraPublished = true;
+    let success = false;
+    try {
+      success = (await channel.track({ online: true, camera, client: this.selfClient })) === "ok";
+    } catch {
+      // Maintenance retries publication after an interrupted connection.
+    }
+    if (this.closed || this.channels.get(this.self) !== channel || this.publication !== publication || this.camera !== camera) return;
+    this.cameraPublished = success;
+    this.cameraPublication(success);
   }
   async send(signal: Signal) {
     const channel = this.channels.get(this.self);

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<title>Validação local de câmera</title>
+<link rel="stylesheet" href="/src/styles.css">
+<video muted autoplay playsinline></video>
+<pre id="report">Executando…</pre>
+<div id="room"></div>
+<script type="module">
+  import { createElement } from "react";
+  import { createRoot } from "react-dom/client";
+  import { Cameras } from "/src/media/cameras.ts";
+  import { RoomPage } from "/src/pages/RoomPage.tsx";
+  import { RoomSession } from "/src/services/session.ts";
+  import { parseSignal } from "/src/services/signaling.ts";
+
+  const members = ["Origem", "Destino"].map(nickname => ({
+    user_id: crypto.randomUUID(), client_id: crypto.randomUUID(), nickname,
+  }));
+  const managers = [];
+  const views = [];
+  const video = document.querySelector("video");
+  const report = document.querySelector("#report");
+  let interruptWatch = true;
+  const assert = (condition, message) => {
+    if (!condition) throw new Error(message);
+  };
+  const wait = async (condition, message) => {
+    const deadline = performance.now() + 15_000;
+    while (!condition()) {
+      assert(performance.now() < deadline, message);
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  };
+
+  try {
+    for (const [index, member] of members.entries()) {
+      const other = 1 - index;
+      managers.push(new Cameras(member.user_id, member.client_id, { iceServers: [] }, async signal => {
+        assert(parseSignal(signal), "Sinal de câmera inválido");
+        if (signal.kind === "watch" && interruptWatch) throw new Error("Sinalização interrompida");
+        queueMicrotask(() => managers[other].receive(member.user_id, signal));
+      }, session => {
+        managers[other].presence(member.user_id, session, member.client_id);
+      }, next => { views[index] = next; }, message => { throw new Error(message); }));
+    }
+    for (const manager of managers) {
+      manager.setMembers(members, false);
+      manager.setConnected(true);
+    }
+    const [source, viewer] = managers;
+    const id = members[0].user_id;
+    const devices = navigator.mediaDevices;
+    const getUserMedia = devices.getUserMedia;
+    try {
+      for (const [name, message] of [["NotAllowedError", "Permissão da câmera negada"], ["NotFoundError", "Nenhuma câmera"]]) {
+        devices.getUserMedia = async () => { throw new DOMException("", name); };
+        const error = await source.start().catch(cause => cause);
+        assert(error?.message.includes(message), `Mensagem incorreta para ${name}`);
+        assert(!source.capturing, "Uma captura com erro ficou ativa");
+      }
+    } finally {
+      devices.getUserMedia = getUserMedia;
+    }
+
+    await source.start();
+    const local = views[0][id].stream;
+    assert(local.getAudioTracks().length === 0, "A câmera contém áudio");
+    await wait(() => views[1]?.[id]?.message?.startsWith("Falha"), "Falha de conexão não exibida");
+    interruptWatch = false;
+    viewer.maintain();
+    await wait(() => views[1]?.[id]?.stream, "Câmera não recebida após reconectar");
+    const remote = views[1][id].stream;
+    video.srcObject = remote;
+    await video.play();
+    await wait(() => video.videoWidth > 0, "Nenhum quadro de vídeo recebido");
+    source.stop();
+    assert(!views[0][id] && !views[1][id], "Prévia permaneceu após desligar");
+    assert([...local.getTracks(), ...remote.getTracks()].every(track => track.readyState === "ended"), "Trilhas permaneceram ativas");
+
+    const snapshot = {
+      room: {
+        id: crypto.randomUUID(), name: "Câmera", max_members: 2, channel_epoch: crypto.randomUUID(),
+        expires_at: "2099-01-01", broadcaster_id: null, stream_session: null, created_by: id,
+      },
+      members,
+    };
+    const preview = await getUserMedia.call(devices, { video: true, audio: false });
+    const root = createRoot(document.querySelector("#room"));
+    RoomSession.prototype.start = async function () {
+      this.callbacks.connection("Conectado");
+    };
+    RoomSession.prototype.startCamera = async function () {
+      this.callbacks.cameras({ [id]: { stream: preview } });
+    };
+    RoomSession.prototype.stopCamera = function () {
+      this.callbacks.cameras({});
+    };
+    try {
+      root.render(createElement(RoomPage, { initial: snapshot, self: id, invite: "local", onLeave: () => {} }));
+      const control = () => document.querySelector(".camera-toggle");
+      const card = () => document.querySelector(".participants li");
+      const avatar = () => card().querySelector(".avatar").getBoundingClientRect();
+      await wait(() => control() && !control().disabled, "Controle da câmera indisponível");
+      const sidebarToggle = document.querySelector(".sidebar-toggle");
+      if (sidebarToggle?.getBoundingClientRect().width) {
+        sidebarToggle.click();
+        await wait(() => document.querySelector(".sidebar-open"), "Lista de participantes indisponível");
+      }
+      const original = avatar();
+      control().click();
+      await wait(() => card()?.querySelector(".camera-avatar video")?.videoWidth > 0, "Vídeo não exibido no cartão");
+      const enlarged = avatar();
+      assert(original.width > 0 && enlarged.width === original.width * 2 && enlarged.height === original.height * 2,
+        "A prévia não tem o dobro do tamanho do avatar");
+      assert(card().textContent.includes("Origem você host") && card().textContent.includes("Na sala"),
+        "Identificação ou status ausente");
+      assert(control().textContent === "Desativar câmera", "Controle de desligamento ausente");
+      control().click();
+      await wait(() => !card().querySelector("video") && avatar().width === original.width, "Avatar original não restaurado");
+    } finally {
+      root.unmount();
+      preview.getTracks().forEach(track => track.stop());
+    }
+    report.textContent = "PASS: permissão, câmera ausente, reconexão, vídeo remoto, cartão com prévia 2× e retorno ao avatar.";
+  } catch (error) {
+    report.textContent = `FAIL: ${error.stack ?? error}`;
+  } finally {
+    managers.forEach(manager => manager.dispose());
+    video.srcObject = null;
+  }
+</script>

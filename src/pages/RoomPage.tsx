@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Brand, Icon } from "../components/Icon";
 import { Player } from "../components/Player";
+import { CameraPreview } from "../components/CameraPreview";
 import {TransitionCover} from '../components/TransitionCover';
 import { Diagnostics } from "../components/Diagnostics";
 import { Settings } from "../components/Settings";
@@ -11,7 +12,7 @@ import { captureGame, captureSupported } from "../media/capture";
 import { inviteLink } from "../services/rooms";
 import { explain } from "../services/errors";
 import { RoomSession } from "../services/session";
-import type { MediaState, PeerMetric, Snapshot } from "../types";
+import type { CameraView, MediaState, PeerMetric, Snapshot } from "../types";
 import {AdminEntry} from '../components/AdminEntry';
 const initialMedia: MediaState = {
   sharing: false,
@@ -42,6 +43,9 @@ export function RoomPage({
   useEffect(()=>{setPosters(previous=>{const next=Object.fromEntries(Object.entries(previous).filter(([id])=>streamKey.split(',').includes(id)));return Object.keys(next).length===Object.keys(previous).length?previous:next;});},[streamKey]);
   const capacity = snapshot.room.max_members ?? 5;
   const [media, setMedia] = useState(initialMedia);
+  const [cameras, setCameras] = useState<Record<string, CameraView>>({});
+  const [cameraBusy, setCameraBusy] = useState(false);
+  const [cameraError, setCameraError] = useState("");
   const [metrics, setMetrics] = useState<PeerMetric[]>([]);
   const [connection, setConnection] = useState("Conectando");
   const [error, setError] = useState("");
@@ -84,10 +88,6 @@ export function RoomPage({
     setConnectionNotice(media.connectionIssue);
   }, [media.connectionIssue]);
   useEffect(() => {
-    if (connection !== "Reconectando" && connection !== "Conexão interrompida") return;
-    setConnectionNotice("A conexão com a sala foi interrompida. Tentando reconectar.");
-  }, [connection]);
-  useEffect(() => {
     if (!connectionNotice) return;
     const timer = setTimeout(() => setConnectionNotice(""), 10_000);
     return () => clearTimeout(timer);
@@ -100,9 +100,14 @@ export function RoomPage({
   }, [diagnostics]);
   useEffect(() => {
     let cancelled = false;
+    setCameras({});
+    setCameraBusy(false);
+    setCameraError("");
     const controller = new RoomSession(initial, self, {
       snapshot: setSnapshot,
       media: setMedia,
+      cameras: setCameras,
+      cameraError: setCameraError,
       metrics: setMetrics,
       error: report,
       connection: setConnection,
@@ -128,11 +133,30 @@ export function RoomPage({
     window.addEventListener("pageshow", show);
     return () => {
       cancelled = true;
+      session.current = null;
       window.removeEventListener("pagehide", hide);
       window.removeEventListener("pageshow", show);
       void controller.close();
     };
   }, [initial, self, report, onLeave,savePoster]);
+  const cameraOn = !!cameras[self]?.stream;
+  const toggleCamera = async () => {
+    const controller = session.current;
+    if (!controller || cameraBusy) return;
+    setCameraError("");
+    if (cameraOn) {
+      controller.stopCamera();
+      return;
+    }
+    setCameraBusy(true);
+    try {
+      await controller.startCamera();
+    } catch (cause) {
+      if (session.current === controller) setCameraError(explain(cause));
+    } finally {
+      if (session.current === controller) setCameraBusy(false);
+    }
+  };
   const selected=streams.find(s=>s.session_id===media.selected);
   const host = snapshot.members.find(
     (m) => m.user_id === selected?.broadcaster_id,
@@ -226,8 +250,10 @@ export function RoomPage({
           <ul>
             {snapshot.members.map((m, i) => (
               <li key={m.user_id}>
-                <span className={`avatar avatar-${i % 4}`}>
-                  {m.nickname.slice(0, 2).toUpperCase()}
+                <span className={`avatar avatar-${i % 4}${cameras[m.user_id]?.stream ? " camera-avatar" : ""}`}>
+                  {cameras[m.user_id]?.stream
+                    ? <CameraPreview stream={cameras[m.user_id].stream!} name={m.nickname} />
+                    : m.nickname.slice(0, 2).toUpperCase()}
                   <i />
                 </span>
                 <div>
@@ -243,6 +269,7 @@ export function RoomPage({
                       ? "Transmitindo agora"
                       : "Na sala"}
                   </span>
+                  {cameras[m.user_id]?.message && <span className="camera-message">{cameras[m.user_id].message}</span>}
                 </div>
                 {streams.some(s=>s.broadcaster_id===m.user_id) && (
                   <Icon name="screen" size={17} />
@@ -261,6 +288,10 @@ export function RoomPage({
               </li>
             ))}
           </ul>
+          <button className="secondary wide camera-toggle" disabled={cameraBusy || (!ready && !cameraOn)} onClick={() => void toggleCamera()}>
+            {cameraBusy ? "Solicitando acesso à câmera…" : cameraOn ? "Desativar câmera" : "Ativar câmera"}
+          </button>
+          {cameraError && <p className="camera-error" role="alert">{cameraError}</p>}
           {snapshot.members.length < capacity && (
             <div className="empty-seat">
               <span>+</span>Tem lugar para mais {capacity - snapshot.members.length}
@@ -458,7 +489,13 @@ export function RoomPage({
             </button>
           </div>
         </div>
-        {connectionNotice && <div className="notice connection-toast" role="alert">{connectionNotice}</div>}
+        {(connection === "Reconectando" || connection === "Conexão interrompida") ? (
+          <div className="notice connection-toast" role="alert">
+            A conexão com a sala foi interrompida. Tentando reconectar.
+          </div>
+        ) : connectionNotice && (
+          <div className="notice connection-toast" role="alert">{connectionNotice}</div>
+        )}
         <div className="room-details">
           {error && (
             <div className="error room-message" role="alert">

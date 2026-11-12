@@ -42,6 +42,7 @@ vi.mock("../src/services/signaling", () => ({
       }
     }
     async send() {}
+    async publishCamera() {}
     async notifyChange() {}
     async close() {}
   },

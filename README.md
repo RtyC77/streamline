@@ -64,6 +64,7 @@ As RPCs `SECURITY DEFINER` têm `search_path` vazio, usam `auth.uid()`, validam 
 5. O espectador recebe a mídia automaticamente. Se o navegador bloquear autoplay, clique em **Reproduzir transmissão**.
 6. Use volume e tela cheia no espectador. No transmissor, volte para o jogo: não há prévia local consumindo renderização de vídeo.
 7. Use **Parar transmissão**, o controle nativo do navegador ou **Sair da sala** para encerrar os recursos.
+8. Na lista de participantes, use **Ativar câmera** para compartilhar vídeo sem áudio com a sala. **Desativar câmera** encerra a captura e restaura o avatar.
 
 O convite tem 64 caracteres hexadecimais e cerca de 244 bits aleatórios, gerados criptograficamente no servidor. Somente o hash SHA-256 fica no banco. O segredo é carregado no fragmento `#convite=...`, que não é enviado ao servidor estático em uma requisição HTTP. Trate o convite como segredo: quem o recebe pode solicitar associação até a expiração. O UUID da sala sozinho não concede acesso.
 
@@ -119,7 +120,7 @@ Se a função opcional estiver configurada e falhar, a aplicação mostra um err
 7. Atualize a Site URL do Auth, os hostnames do Turnstile e as origens da função TURN, se utilizada.
 8. Execute o checklist manual usando a URL HTTPS publicada. Cada push na branch configurada gera um novo deploy. Variáveis Vite entram **no build**: alterá-las exige novo deploy.
 
-`public/_headers` prepara CSP, proteção contra framing, `Referrer-Policy` e bloqueio de microfone/webcam. `public/_redirects` prepara fallback estático para a aplicação. Valide os headers na URL publicada; o Vite de desenvolvimento não aplica esses arquivos do Cloudflare. TURN é transporte WebRTC, não um endpoint HTTP que deva ser adicionado à CSP.
+`public/_headers` prepara CSP, proteção contra framing, `Referrer-Policy` e a política de dispositivos. A câmera é permitida na própria origem e o microfone é bloqueado. `public/_redirects` prepara fallback estático para a aplicação. Valide os headers na URL publicada; o Vite de desenvolvimento não aplica esses arquivos do Cloudflare. TURN é transporte WebRTC, não um endpoint HTTP que deva ser adicionado à CSP.
 
 O workflow `.github/workflows/ci.yml` executa os testes e o build em pushes/PRs. A hospedagem automática ocorre pela integração Git do Pages, sem token Cloudflare no frontend. Não foi criado repositório remoto nem realizado deploy nesta entrega: não foram fornecidos projeto Supabase, credenciais ou destino GitHub/Cloudflare.
 

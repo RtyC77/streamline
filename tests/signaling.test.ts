@@ -4,11 +4,20 @@ const state = vi.hoisted(() => ({
   disconnect: vi.fn(),
   remove: vi.fn(),
   keep: false,
+  subscriptions: new Map<string, (status: string) => void>(),
 }));
 vi.mock("../src/services/supabase", () => ({
   client: () => ({
     channel: (topic: string) => {
-      const c = { topic, on: () => c, subscribe: () => c };
+      const c = {
+        topic,
+        on: () => c,
+        subscribe: (callback: (status: string) => void) => {
+          state.subscriptions.set(topic, callback);
+          return c;
+        },
+        track: async () => "ok",
+      };
       state.channels.push(c);
       return c;
     },
@@ -30,9 +39,29 @@ import { Signaling } from "../src/services/signaling";
 beforeEach(() => {
   state.channels = [];
   state.keep = false;
+  state.subscriptions.clear();
   vi.clearAllMocks();
 });
 describe("Recursos do Realtime", () => {
+  it("aguarda a primeira inscrição e sinaliza a interrupção de um canal já conectado", async () => {
+    const status = vi.fn();
+    const fail = vi.fn();
+    const s = new Signaling("room", "self", () => {}, () => {}, status, fail);
+    const members = [{ user_id: "self", client_id: "tab", nickname: "Eu" }];
+    await s.sync(members, "initial");
+    expect(status).not.toHaveBeenCalled();
+
+    state.subscriptions.get("room:room:initial:user:self")!("SUBSCRIBED");
+    await s.sync(members, "next");
+    expect(status.mock.calls).toEqual([[true], [false]]);
+
+    const notify = state.subscriptions.get("room:room:next:user:self")!;
+    notify("TIMED_OUT");
+    expect(fail).toHaveBeenCalledOnce();
+    notify("SUBSCRIBED");
+    expect(status).toHaveBeenLastCalledWith(true);
+    await s.close();
+  });
   it("libera o socket mesmo se a saída individual de canal atingir timeout", async () => {
     state.keep = true;
     const s = new Signaling(

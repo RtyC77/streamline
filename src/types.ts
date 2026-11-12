@@ -32,11 +32,16 @@ export type SignalBody =
   | { kind: "offer" | "answer"; sdp: string }
   | { kind: "ice"; candidate: RTCIceCandidateInit };
 export type Signal = SignalBody & {
+  media?: "camera";
   to: string;
   session: string;
   connection: string;
   client: string;
 };
+export interface CameraView {
+  stream?: MediaStream;
+  message?: string;
+}
 export interface PeerMetric {
   connection?: string;
   id: string;
