@@ -15,3 +15,7 @@ enable_confirmations = true
 # The handler validates the user JWT with Auth and checks room membership via RLS.
 # This also works with asymmetric signing keys and new publishable keys.
 verify_jwt = false
+
+[functions.register-account]
+# Public signup; the handler verifies Turnstile before using the Auth Admin API.
+verify_jwt = false

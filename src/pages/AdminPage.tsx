@@ -17,7 +17,7 @@ const actionNames: Record<string, string> = {
   demote: "Rebaixar para usuário",
   bootstrap: "Inicializar SuperAdmin",
   close_room: "Finalizar sala",
-  confirm_email: "Confirmar e-mail manualmente",
+  confirm_email: "Liberar acesso sem e-mail",
 };
 const pageSize = 25;
 
@@ -164,10 +164,11 @@ export function AdminPage({ profile, logout }: { profile: Profile; logout: () =>
             const canBlock = superadmin || user.role === "user";
             return <li key={user.id}>
               <h2>{user.username}</h2>
-              <p>{user.email}{!user.email_confirmed_at && " · E-mail pendente"}</p>
+              <p>{user.email}</p>
               <dl>
                 <div><dt>Cargo</dt><dd>{roleNames[user.role]}</dd></div>
                 <div><dt>Status</dt><dd>{statusNames[user.status]}</dd></div>
+                <div><dt>Confirmação da conta</dt><dd>{user.email_confirmed_at ? "Confirmada" : "Pendente"}</dd></div>
                 <div><dt>Criação de salas</dt><dd>{user.can_create_rooms ? "Autorizada" : "Pendente"}</dd></div>
                 <div><dt>Cadastro</dt><dd>{date(user.created_at)}</dd></div>
                 <div><dt>Último login</dt><dd>{date(user.last_sign_in_at)}</dd></div>

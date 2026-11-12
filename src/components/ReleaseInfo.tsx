@@ -37,6 +37,7 @@ const releases = [
           "Os links de confirmação de e-mail e recuperação de senha podem voltar ao endereço público do StreamLite, inclusive quando solicitados em um ambiente de testes.",
           "Painel administrativo com pesquisa de usuários, gestão de permissões e histórico de alterações.",
           "Administradores podem confirmar manualmente o e-mail de contas ativas pendentes para liberar o login com senha. A confirmação fica no histórico.",
+          "O cadastro pode aparecer no painel mesmo quando o e-mail de confirmação falha. O painel mostra a confirmação da conta separada da permissão para criar salas.",
           "Rolagem nas abas de Usuários, Histórico e Salas ativas, com botões mais fáceis de usar em telas pequenas.",
         ],
       },

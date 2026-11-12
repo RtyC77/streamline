@@ -23,7 +23,16 @@ O Supabase Auth gerencia e-mail, senha, confirmação, recuperação e sessão. 
 
 ## Implantação
 
-Em **Administração → Usuários**, Admins e SuperAdmins podem usar **Confirmar e-mail manualmente** em contas comuns ativas com e-mail pendente. Verifique por outro meio que o endereço pertence à pessoa antes de confirmar. Depois, ela pode entrar com a senha do cadastro. A ação fica no histórico. Se o cadastro falhou antes de criar a conta e ela não aparece na lista, resolva primeiro a falha de cadastro no Supabase.
+Em **Administração → Usuários**, Admins e SuperAdmins podem usar **Liberar acesso sem e-mail** em contas comuns ativas com confirmação pendente. Verifique por outro meio que o endereço pertence à pessoa. Depois da liberação, ela pode entrar com o mesmo e-mail e senha usados no cadastro. A ação fica no histórico e é independente da permissão para criar salas.
+
+Para manter o cadastro disponível quando o envio de e-mail falha:
+
+1. Mantenha **Confirm Email** ativo no Supabase. Configure Turnstile para o endereço público e adicione `VITE_TURNSTILE_SITE_KEY` ao build do frontend.
+2. Configure os segredos da Edge Function `REGISTRATION_TURNSTILE_SECRET` (segredo do widget Turnstile) e `REGISTRATION_ORIGINS` (origens exatas separadas por vírgulas, como `https://streamline-cfw.pages.dev`). A função usa as variáveis de servidor `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` do ambiente Supabase.
+3. Publique a função com `supabase functions deploy register-account`. Depois defina `VITE_REGISTRATION_FUNCTION=true` no Cloudflare Pages e publique o frontend.
+4. Em um projeto de testes, faça um cadastro com o envio disponível e outro com o envio indisponível. Confira se os dois aparecem no painel. No segundo caso, libere a conta pelo painel e teste o login com a senha cadastrada.
+
+Se o SMTP falhar, a função preserva a conta pendente. Cadastros que falharam antes da criação da conta precisam ser refeitos com o e-mail que a pessoa pretende usar.
 
 1. Confira as migrations já aplicadas e faça a validação inicial em um projeto de testes. A migração de contas restringe o acesso no momento em que é aplicada. Coordene a publicação do frontend e o corte para evitar que clientes antigos tentem ingressar com sessões anônimas.
 2. No Supabase hospedado, habilite cadastro por e-mail e **Confirm Email**, configure senha mínima de oito caracteres e desabilite novos logins anônimos. Em **Authentication → URL Configuration**, configure **Site URL** com a URL HTTPS do frontend e autorize as URLs exatas da raiz (`/`) e da recuperação (`/recuperar`) em **Redirect URLs**. Mantenha os templates de confirmação e recuperação com o link padrão `{{ .ConfirmationURL }}`. Configure SMTP e valide a entrega antes de liberar novos cadastros. Se um link abrir `localhost:3000`, confira essas configurações e teste com um e-mail novo, pois links antigos podem carregar o destino anterior. [Redirecionamentos no Supabase Auth](https://supabase.com/docs/guides/auth/redirect-urls)

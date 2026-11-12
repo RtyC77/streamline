@@ -3,7 +3,7 @@ import { Brand } from "../components/Icon";
 import { authEmailRedirect } from "../config";
 import { Turnstile } from "../components/Turnstile";
 import { explain } from "../services/errors";
-import { prepareAuth, rememberSession } from "../services/supabase";
+import { prepareAuth, prepareClient, rememberSession } from "../services/supabase";
 
 type Mode = "login" | "register" | "forgot" | "reset";
 
@@ -17,7 +17,7 @@ const titles: Record<Mode, string> = {
 function authError(error: unknown, mode: Mode) {
   const code = error && typeof error === "object" && "code" in error ? error.code : "";
   if (code === "invalid_credentials") return "E-mail ou senha inválidos.";
-  if (code === "email_not_confirmed") return "Confirme seu e-mail pelo link enviado no cadastro.";
+  if (code === "email_not_confirmed") return "A conta ainda está pendente. Use o link de confirmação ou peça à administração para liberar o acesso.";
   if (code === "unexpected_failure" && mode === "register")
     return "Não foi possível criar a conta. Verifique se o nome de usuário está disponível.";
   if (code === "over_email_send_rate_limit") {
@@ -39,6 +39,8 @@ export function AuthPage({ recovery, initialMessage = "" }: { recovery?: boolean
   const [busy, setBusy] = useState(false);
   const [captcha, setCaptcha] = useState("");
   const [captchaAttempt, setCaptchaAttempt] = useState(0);
+  const [registeredEmail, setRegisteredEmail] = useState("");
+  const independentRegistration = import.meta.env.VITE_REGISTRATION_FUNCTION === "true";
   const requiresCaptcha = Boolean(import.meta.env.VITE_TURNSTILE_SITE_KEY) && mode !== "reset";
   const hasPassword = mode !== "forgot";
   const newPassword = mode === "reset" || mode === "register";
@@ -75,6 +77,20 @@ export function AuthPage({ recovery, initialMessage = "" }: { recovery?: boolean
         rememberSession(fields.get("remember") === "on");
         const { error } = await auth.signInWithPassword({ email, password, options });
         if (error) throw error;
+      } else if (mode === "register" && independentRegistration) {
+        if (!captcha) throw new Error("A verificação de segurança do cadastro está indisponível.");
+        const api = await prepareClient();
+        const { data, error } = await api.functions.invoke<{ confirmation: "requested" | "pending" | "unknown" }>("register-account", {
+          body: { email, password, username: String(fields.get("username")).trim(), captcha },
+        });
+        if (error) {
+          const detail = error.context instanceof Response ? await error.context.json().catch(() => null) : null;
+          throw new Error(typeof detail?.error === "string" ? detail.error : "O serviço de cadastro está indisponível. Tente mais tarde.");
+        }
+        setRegisteredEmail(email);
+        changeMode("login", data?.confirmation === "pending"
+          ? "Conta criada. O e-mail não pôde ser enviado. Peça à administração para liberar o acesso."
+          : "Se a conta estiver pendente, use o link de confirmação ou peça à administração para liberar o acesso. Entre com o e-mail usado no cadastro.");
       } else if (mode === "register") {
         const { error } = await auth.signUp({
           email, password,
@@ -85,7 +101,8 @@ export function AuthPage({ recovery, initialMessage = "" }: { recovery?: boolean
           },
         });
         if (error) throw error;
-        changeMode("login", "Se o cadastro estiver disponível, você receberá um link para confirmar seu e-mail.");
+        setRegisteredEmail(email);
+        changeMode("login", "Se a conta estiver pendente, use o link de confirmação ou peça à administração para liberar o acesso.");
       } else if (mode === "forgot") {
         const { error } = await auth.resetPasswordForEmail(email, {
           ...options, redirectTo: authEmailRedirect("/recuperar"),
@@ -125,6 +142,7 @@ export function AuthPage({ recovery, initialMessage = "" }: { recovery?: boolean
           {mode !== "reset" && <>
             <label htmlFor="account-email">E-mail</label>
             <input id="account-email" name="email" type="email" required maxLength={254}
+              defaultValue={mode === "login" ? registeredEmail : undefined}
               autoComplete={mode === "login" ? "username" : "email"} disabled={busy} />
           </>}
           {hasPassword && <>
