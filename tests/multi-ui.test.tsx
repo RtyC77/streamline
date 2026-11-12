@@ -10,10 +10,16 @@ describe('Compartilhamento e seleção',()=>{
   expect(html).toContain('Compartilhar áudio do sistema');expect(html).toContain('YouTube');expect(html).not.toContain('checked=""');
   const opted=renderToStaticMarkup(<ShareOptions initial={{resolution:480,fps:24,systemAudio:true}} onClose={()=>{}} onShare={()=>{}}/>);expect(opted).toContain('checked=""');
  });
- it('oferece somente 480p/720p e 24/30 FPS',()=>{
+ it('oferece as novas resoluções e taxas de quadros e avisa sobre configurações pesadas',()=>{
   const html=renderToStaticMarkup(<ShareOptions onClose={()=>{}} onShare={()=>{}}/>);
-  for(const value of [480,720,24,30])expect(html).toContain(`value="${value}"`);
-  expect(html).toContain('Escolher janela e compartilhar');expect(html).not.toContain('1080p');
+  for(const value of [480,720,1080,24,30,48,60])expect(html).toContain(`value="${value}"`);
+  expect(html).toContain('Escolher janela e compartilhar');
+  expect(html).not.toContain('extremamente pesada');
+  for(const initial of [{resolution:1080,fps:30},{resolution:720,fps:48},{resolution:720,fps:60}] as const){
+   const heavy=renderToStaticMarkup(<ShareOptions initial={initial} onClose={()=>{}} onShare={()=>{}}/>);
+   expect(heavy).toContain('role="alert"');
+   expect(heavy).toContain('extremamente pesada');
+  }
  });
  it('mostra três telas selecionáveis sem criar três players ao vivo',()=>{
   vi.stubGlobal('window',{isSecureContext:false});vi.stubGlobal('location',{origin:'https://example.com'});

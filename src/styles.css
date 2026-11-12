@@ -9,6 +9,10 @@
 .stage.stage-background{position:fixed;left:-10000px;top:0;width:640px;height:360px;min-height:0;pointer-events:none}
 .connection-toast{position:fixed;top:20px;right:20px;z-index:1000;width:min(380px,calc(100vw - 40px));box-shadow:0 8px 30px #0008}
 .share-options{margin-top:20px}.share-options select{width:100%;margin-bottom:18px;padding:12px;color:inherit;background:var(--inset);border:1px solid var(--border);border-radius:9px}.share-options p{font-size:12px;line-height:1.6}
+.share-performance-warning {
+  color: #ff8b92;
+  font-weight: 700;
+}
 .admin-entry{font-size:11px;white-space:nowrap}
 .admin-dialog{width:min(680px,calc(100% - 24px));max-height:85dvh;overflow:auto}
 .admin-dialog form{margin-top:22px}.admin-dialog form input{margin-bottom:16px}.admin-dialog form button{margin-top:8px}
