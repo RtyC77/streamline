@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Brand } from "../components/Icon";
+import { authEmailRedirect } from "../config";
 import { Turnstile } from "../components/Turnstile";
 import { explain } from "../services/errors";
 import { prepareAuth, rememberSession } from "../services/supabase";
@@ -74,14 +75,14 @@ export function AuthPage({ recovery, initialMessage = "" }: { recovery?: boolean
           options: {
             ...options,
             data: { username: String(fields.get("username")).trim() },
-            emailRedirectTo: new URL("/", location.origin).href,
+            emailRedirectTo: authEmailRedirect("/"),
           },
         });
         if (error) throw error;
         changeMode("login", "Se o cadastro estiver disponível, você receberá um link para confirmar seu e-mail.");
       } else if (mode === "forgot") {
         const { error } = await auth.resetPasswordForEmail(email, {
-          ...options, redirectTo: new URL("/recuperar", location.origin).href,
+          ...options, redirectTo: authEmailRedirect("/recuperar"),
         });
         if (error) throw error;
         changeMode("login", "Se houver uma conta para esse e-mail, você receberá um link para redefinir a senha.");

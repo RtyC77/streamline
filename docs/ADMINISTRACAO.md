@@ -24,7 +24,7 @@ O Supabase Auth gerencia e-mail, senha, confirmação, recuperação e sessão. 
 ## Implantação
 
 1. Confira as migrations já aplicadas e faça a validação inicial em um projeto de testes. A migração de contas restringe o acesso no momento em que é aplicada. Coordene a publicação do frontend e o corte para evitar que clientes antigos tentem ingressar com sessões anônimas.
-2. No Supabase hospedado, habilite cadastro por e-mail e **Confirm Email**, configure senha mínima de oito caracteres e desabilite novos logins anônimos. Configure **Site URL** com a URL HTTPS do frontend e autorize a URL exata `/recuperar` nessa origem. Mantenha os templates de confirmação e recuperação com o link padrão `{{ .ConfirmationURL }}`. Configure SMTP e valide a entrega antes de liberar novos cadastros. [Configuração de Auth](https://supabase.com/docs/guides/auth/general-configuration)
+2. No Supabase hospedado, habilite cadastro por e-mail e **Confirm Email**, configure senha mínima de oito caracteres e desabilite novos logins anônimos. Em **Authentication → URL Configuration**, configure **Site URL** com a URL HTTPS do frontend e autorize as URLs exatas da raiz (`/`) e da recuperação (`/recuperar`) em **Redirect URLs**. Mantenha os templates de confirmação e recuperação com o link padrão `{{ .ConfirmationURL }}`. Configure SMTP e valide a entrega antes de liberar novos cadastros. Se um link abrir `localhost:3000`, confira essas configurações e teste com um e-mail novo, pois links antigos podem carregar o destino anterior. [Redirecionamentos no Supabase Auth](https://supabase.com/docs/guides/auth/redirect-urls)
 3. Em **Realtime Settings**, desabilite **Allow public access**. Se usar Turnstile, configure o segredo no Supabase Auth e a chave pública no build do frontend. Mantenha a Edge Function de TURN se o projeto usa TURN. [Autorização de Realtime](https://supabase.com/docs/guides/realtime/authorization)
 4. Aplique as migrations pendentes em ordem, até `202611120011_accounts.sql`. Use `supabase db push` em um projeto vinculado cuja tabela de histórico reflita as migrations aplicadas. Se a instalação foi feita pelo SQL Editor sem registro de histórico, confira primeiro o banco e aplique apenas os arquivos pendentes. Mantenha os agendamentos de `supabase/maintenance.sql`.
 5. Inicialize Rod com o procedimento abaixo. Publique a raiz atual no repositório e na branch associados ao Cloudflare Pages. Use Node 24, `npm run build` e diretório de saída `dist`. A regra de fallback em `public/_redirects` precisa servir `/admin` e `/recuperar` diretamente.
@@ -35,6 +35,7 @@ O Supabase Auth gerencia e-mail, senha, confirmação, recuperação e sessão. 
 | Ambiente | Variáveis |
 | --- | --- |
 | Build do frontend | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` |
+| Build com destino público fixo para e-mails | `VITE_AUTH_SITE_URL` (origem HTTPS também autorizada no Supabase) |
 | Build com CAPTCHA | `VITE_TURNSTILE_SITE_KEY` |
 | Build com TURN | `VITE_TURN_FUNCTION`, `VITE_ICE_SERVERS`, `VITE_ICE_TRANSPORT_POLICY`, conforme a configuração existente |
 | Processo confiável de inicialização | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPERADMIN_BOOTSTRAP_PASSWORD` |

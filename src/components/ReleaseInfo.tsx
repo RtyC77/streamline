@@ -33,6 +33,7 @@ const releases = [
         title: "Conta e administração",
         changes: [
           "Cadastro com confirmação de e-mail, recuperação de senha e opção de permanecer conectado.",
+          "Os links de confirmação de e-mail e recuperação de senha podem voltar ao endereço público do StreamLite, inclusive quando solicitados em um ambiente de testes.",
           "Painel administrativo com pesquisa de usuários, gestão de permissões e histórico de alterações.",
         ],
       },

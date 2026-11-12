@@ -2,6 +2,22 @@ export const configured = Boolean(
   import.meta.env.VITE_SUPABASE_URL &&
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
 );
+
+export function authEmailRedirect(path: "/" | "/recuperar"): string {
+  const publicUrl = import.meta.env.VITE_AUTH_SITE_URL?.trim();
+  if (!publicUrl) return new URL(path, location.origin).href;
+
+  try {
+    const url = new URL(publicUrl);
+    if (url.protocol === "https:" && !url.username && !url.password &&
+        url.pathname === "/" && !url.search && !url.hash) {
+      return new URL(path, url.origin).href;
+    }
+  } catch {
+    // Report the same configuration error for invalid URLs.
+  }
+  throw new Error("Configure VITE_AUTH_SITE_URL com a origem HTTPS do StreamLite.");
+}
 export const target = {
   width: 1280,
   height: 720,
