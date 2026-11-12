@@ -17,6 +17,7 @@ const paths = {
   stop: "M5 5h14v14H5z",
   chart: "M4 20V10 M10 20V4 M16 20v-7 M22 20V7",
   check: "m5 12 4 4L20 5",
+  crown: "m3 6 5 4 4-6 4 6 5-4-2 12H5L3 6Z",
   close: "m5 5 14 14 M19 5 5 19",
   removeUser:
     "M15 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2 M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M17 9h6",

@@ -216,13 +216,10 @@ export function RoomPage({
           Fechar detalhes
         </button>
         <h1 className="sidebar-title">{snapshot.room.name}</h1>
-        <details className="invite-menu">
-          <summary>Convite</summary>
-          <button className="secondary wide" onClick={() => void copy()}>
-            <Icon name={copied ? "check" : "copy"} size={16} />
-            {copied ? "Convite copiado" : "Copiar convite"}
-          </button>
-        </details>
+        <button className="secondary invite-copy" onClick={() => void copy()}>
+          <Icon name={copied ? "check" : "copy"} size={16} />
+          {copied ? "Convite copiado" : "Copiar convite"}
+        </button>
         <div className="participants">
           <div className="participant-heading">
             <span className="section-label">PARTICIPANTES</span>
@@ -240,7 +237,14 @@ export function RoomPage({
                     : <span aria-hidden="true">{m.nickname.slice(0, 2).toUpperCase()}</span>}
                 </span>
                 <div>
-                  <strong title={m.nickname}>{m.nickname}</strong>
+                  <div className="participant-name">
+                    <strong title={m.nickname}>{m.nickname}</strong>
+                    {m.user_id === snapshot.room.created_by && (
+                      <span className="participant-crown" role="img" aria-label="Criador da sala" title="Criador da sala">
+                        <Icon name="crown" size={14} />
+                      </span>
+                    )}
+                  </div>
                   {cameras[m.user_id]?.message && <span className="camera-message">{cameras[m.user_id].message}</span>}
                 </div>
                 {streams.some(s=>s.broadcaster_id===m.user_id) && (

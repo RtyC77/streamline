@@ -468,22 +468,8 @@ h2 {
   font-weight: 650;
   color: #8f9bad;
 }
-.invite-menu {
+.invite-copy {
   margin: 16px 20px 0;
-  background: #1d222a;
-  border: 1px solid #303641;
-  border-radius: 10px;
-}
-.invite-menu summary {
-  padding: 12px;
-  border-radius: inherit;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 650;
-}
-.invite-menu button {
-  width: calc(100% - 16px);
-  margin: 0 8px 8px;
 }
 .participants {
   padding: 28px 20px;
@@ -569,6 +555,16 @@ h2 {
   gap: 4px;
   flex: 1;
   min-width: 0;
+}
+.participant-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.participant-crown {
+  display: inline-flex;
+  flex: none;
+  color: #f4cf5a;
 }
 .participants strong {
   font-size: 12px;
