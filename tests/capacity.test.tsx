@@ -2,7 +2,7 @@ import {describe,it,expect,vi,afterEach} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {RoomCapacity} from '../src/components/RoomCapacity';
 const mocks=vi.hoisted(()=>({rpc:vi.fn().mockResolvedValue({data:{},error:null})}));
-vi.mock('../src/services/supabase',()=>({client:()=>({rpc:mocks.rpc})}));
+vi.mock('../src/services/supabase',()=>({prepareClient:async()=>({rpc:mocks.rpc})}));
 import {enter} from '../src/services/rooms';
 afterEach(()=>{vi.clearAllMocks();vi.unstubAllGlobals();});
 describe('Capacidade da sala',()=>{

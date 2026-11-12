@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseSignal } from "../src/services/signaling";
-import { parseInvite } from "../src/services/rooms";
+import { parseInvite, parseRoomLink } from "../src/services/rooms";
 import { parseIce } from "../src/config";
 import { bitrate } from "../src/media/stats";
 const base = {
@@ -21,6 +21,10 @@ describe("Convites e mensagens não confiáveis", () => {
     expect(parseInvite(token)).toBe(token);
     expect(parseInvite(`https://example.com/#convite=${token}`)).toBe(token);
     expect(() => parseInvite(crypto.randomUUID())).toThrow();
+    const room = crypto.randomUUID();
+    expect(parseRoomLink(room.toUpperCase())).toBe(room);
+    expect(parseRoomLink(`https://example.com/#sala=${room}`)).toBe(room);
+    expect(parseRoomLink(`https://example.com/#convite=${token}`)).toBe(token);
     expect(() =>
       parseInvite("https://example.com/?convite=" + token),
     ).toThrow();

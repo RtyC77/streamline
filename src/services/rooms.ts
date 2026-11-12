@@ -1,4 +1,4 @@
-import { client } from "./supabase";
+import { prepareClient } from "./supabase";
 import type { Entry, Snapshot } from "../types";
 export function tabId() {
   let id = sessionStorage.getItem("streamlite-client");
@@ -23,6 +23,19 @@ export function parseInvite(input: string): string {
       "Cole o link completo ou o código de convite de 64 caracteres.",
     );
   return token;
+}
+export function parseRoomLink(input: string): string {
+  const value = input.trim();
+  if (isRoomId(value)) return value.toLowerCase();
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const id = new URLSearchParams(new URL(value).hash.slice(1)).get("sala");
+      if (id && isRoomId(id)) return id.toLowerCase();
+    } catch {
+      throw new Error("Link de convite inválido.");
+    }
+  }
+  return parseInvite(value);
 }
 export function inviteLink(token: string) {
   return `${location.origin}/#${isRoomId(token) ? "sala" : "convite"}=${token}`;
@@ -55,7 +68,7 @@ export async function rpc<T>(
   name: string,
   args: Record<string, unknown>,
 ): Promise<T> {
-  const { data, error } = await client().rpc(name, args);
+  const { data, error } = await (await prepareClient()).rpc(name, args);
   if (error) throw error;
   if (data && typeof data === "object" && "error" in data)
     throw new Error(String(data.error));

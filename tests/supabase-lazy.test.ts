@@ -3,6 +3,7 @@ const mock = vi.hoisted(() => ({
   create: vi.fn(),
   session: vi.fn(),
   signIn: vi.fn(),
+  rpc: vi.fn(),
 }));
 vi.mock("@supabase/supabase-js", () => ({ createClient: mock.create }));
 beforeEach(() => {
@@ -11,6 +12,7 @@ beforeEach(() => {
   vi.stubEnv("VITE_SUPABASE_URL", "https://example.supabase.co");
   vi.stubEnv("VITE_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test");
   mock.create.mockImplementation(() => ({
+    rpc: mock.rpc,
     auth: { getSession: mock.session, signInAnonymously: mock.signIn },
   }));
 });
@@ -33,6 +35,13 @@ describe("Inicialização sob demanda", () => {
     });
     const api = await import("../src/services/supabase");
     expect(await api.authenticate()).toBe("mesmo-usuario");
+    expect(mock.signIn).not.toHaveBeenCalled();
+  });
+  it("carrega o catálogo antes de autenticar ou entrar em uma sala", async () => {
+    mock.rpc.mockResolvedValue({ data: [], error: null });
+    const { listRooms } = await import("../src/services/rooms");
+    await expect(listRooms(0)).resolves.toEqual([]);
+    expect(mock.rpc).toHaveBeenCalledWith("list_rooms", { p_limit: 26, p_offset: 0 });
     expect(mock.signIn).not.toHaveBeenCalled();
   });
 });

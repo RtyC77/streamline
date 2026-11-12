@@ -3,7 +3,7 @@ import { Brand, Icon } from "../components/Icon";
 import { Turnstile } from "../components/Turnstile";
 import { configured } from "../config";
 import { authenticate } from "../services/supabase";
-import { createListedRoom, enter, inviteLink, isRoomId, joinListedRoom, listRooms, parseInvite, type ListedRoom } from "../services/rooms";
+import { createListedRoom, enter, inviteLink, isRoomId, joinListedRoom, listRooms, parseRoomLink, type ListedRoom } from "../services/rooms";
 import { explain } from "../services/errors";
 import type { Entry } from "../types";
 import {AdminEntry} from '../components/AdminEntry';
@@ -25,7 +25,7 @@ export function HomePage({
     const id = new URLSearchParams(location.hash.slice(1)).get("sala");
     return id && isRoomId(id) ? { id } : null;
   });
-  const [joining, setJoining] = useState(false);
+  const [joining, setJoining] = useState(() => Boolean(target || invite));
   const [access, setAccess] = useState<"public" | "private">("public");
   const [password, setPassword] = useState("");
   const [rooms, setRooms] = useState<ListedRoom[] | null>(null);
@@ -75,12 +75,15 @@ export function HomePage({
     try {
       if (nickname.trim().length < 2)
         throw new Error("Escolha um apelido de 2 a 24 caracteres.");
+      const destination = join ? target?.id ?? parseRoomLink(invite) : null;
       const id = await authenticate(captcha);
-      const data = join
-        ? target ? await joinListedRoom(target.id, nickname, password) : await enter(nickname, invite)
+      const data = destination
+        ? isRoomId(destination)
+          ? await joinListedRoom(destination, nickname, password)
+          : await enter(nickname, destination)
         : await createListedRoom(nickname, capacity, access, password);
       localStorage.setItem("streamlite-nickname", nickname.trim());
-      const normalized = join && !target ? parseInvite(invite) : data.room.id;
+      const normalized = destination ?? data.room.id;
       history.replaceState(null, "", inviteLink(normalized));
       onEnter(data, id, normalized);
     } catch (e) {
@@ -140,8 +143,8 @@ export function HomePage({
                       const value = e.target.value;
                       setInvite(value);
                       try {
-                        const id = new URLSearchParams(new URL(value).hash.slice(1)).get("sala");
-                        if (id && isRoomId(id)) setTarget({ id });
+                        const destination = parseRoomLink(value);
+                        if (isRoomId(destination)) setTarget({ id: destination });
                       } catch { /* Keep accepting legacy invite codes and partial input. */ }
                     }}
                     disabled={busy}
@@ -172,7 +175,6 @@ export function HomePage({
               <Icon name="arrow" size={18} />
             </button>
             <Turnstile
-              key={busy ? "busy" : "idle"}
               onToken={setCaptcha}
               onError={setError}
             />
