@@ -45,6 +45,8 @@ export function RoomPage({
   const [metrics, setMetrics] = useState<PeerMetric[]>([]);
   const [connection, setConnection] = useState("Conectando");
   const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const [connectionNotice, setConnectionNotice] = useState("");
   const [notice, setNotice] = useState("");
   const [sharingBusy, setSharingBusy] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -67,6 +69,22 @@ export function RoomPage({
   const session = useRef<RoomSession | null>(null);
   const stage = useRef<HTMLDivElement>(null);
   const report = useCallback((e: unknown) => setError(explain(e)), []);
+  useEffect(() => {
+    if (!media.connectionIssue) return;
+    setConnectionNotice(media.connectionIssue);
+  }, [media.connectionIssue]);
+  useEffect(() => {
+    if (connection !== "Reconectando" && connection !== "Conexão interrompida") return;
+    setConnectionNotice("A conexão com a sala foi interrompida. Tentando reconectar.");
+  }, [connection]);
+  useEffect(() => {
+    if (!connectionNotice) return;
+    const timer = setTimeout(() => setConnectionNotice(""), 10_000);
+    return () => clearTimeout(timer);
+  }, [connectionNotice]);
+  useEffect(() => {
+    if (streams.length === 0) setExpanded(false);
+  }, [streams.length]);
   useEffect(() => {
     session.current?.setDiagnostics(diagnostics);
   }, [diagnostics]);
@@ -287,13 +305,14 @@ export function RoomPage({
             <Icon name="chart" />
           </button>
         </div>
-        {streams.length>0&&<div className="stream-picker" aria-label="Telas compartilhadas" aria-busy={media.switching===true}>
-          {streams.map(stream=>{const member=snapshot.members.find(m=>m.user_id===stream.broadcaster_id);const current=stream.session_id===media.selected;return <button key={stream.session_id} className={`stream-tile ${current?'selected':''}`} aria-pressed={current} disabled={media.switching||(current&&!media.connectionIssue)} onClick={()=>{if(!media.switching&&(!current||media.connectionIssue)){freeze.current?.();session.current?.watch(stream.session_id);}}}>
+        {expanded && streams.length > 0 && <button className="secondary back-to-grid" onClick={() => setExpanded(false)}>Voltar</button>}
+        {streams.length>0&&!expanded&&<div className="stream-picker" aria-label="Telas compartilhadas" aria-busy={media.switching===true}>
+          {streams.map(stream=>{const member=snapshot.members.find(m=>m.user_id===stream.broadcaster_id);const current=stream.session_id===media.selected;return <button key={stream.session_id} className={`stream-tile ${current?'selected':''}`} aria-pressed={current} disabled={media.switching} onClick={()=>{if(!current||media.connectionIssue){freeze.current?.();session.current?.watch(stream.session_id);}setExpanded(true);}}>
             <div className="stream-still">{posters[stream.session_id]?<img src={posters[stream.session_id]} alt="Quadro congelado da transmissão"/>:<Icon name="screen" size={28}/>}<span>{current?'Selecionada':posters[stream.session_id]?'Congelada':'Prévia indisponível'}</span></div>
             <strong>{member?.nickname??'Participante'}{stream.broadcaster_id===self?' · você':''}</strong>
           </button>;})}
         </div>}
-        <div className="stage" ref={stage}>
+        <div className={`stage ${streams.length > 0 && !expanded ? 'stage-background' : ''}`} ref={stage}>
           {media.remote ? (
             <Player key={media.selected} stream={media.remote} volume={volume} onError={setError} freeze={freeze} poster={media.selected?posters[media.selected]:undefined} onReady={()=>{if(media.selected&&media.remote)session.current?.firstFrame(media.selected,media.remote);}} onStill={image=>{if(media.selected)session.current?.rememberPreview(media.selected,image);}}/>
           ) : (
@@ -346,19 +365,6 @@ export function RoomPage({
             </div>
           )}
           {!media.remote&&selected&&selected.broadcaster_id!==self&&<TransitionCover poster={posters[selected.session_id]} failed={!media.switching&&!!media.connectionIssue}/>}
-          <div className="stage-caption">
-            <span>
-              <Icon name="lock" size={13} />
-              Mídia entre participantes
-            </span>
-            <span>
-              {media.remote
-                ? `${media.status} · ${media.audio}`
-                : media.sharing
-                  ? "Captura nativa"
-                  : "Aguardando transmissão"}
-            </span>
-          </div>
         </div>
         <div className="control-bar">
           <div className="main-actions">
@@ -431,7 +437,7 @@ export function RoomPage({
             </button>
           </div>
         </div>
-        {media.connectionIssue && <div className="notice room-message" role="status">{media.connectionIssue}</div>}
+        {connectionNotice && <div className="notice connection-toast" role="alert">{connectionNotice}</div>}
         {error && (
           <div className="error room-message" role="alert">
             <span>{error}</span>
