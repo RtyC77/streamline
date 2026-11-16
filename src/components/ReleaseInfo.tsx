@@ -4,6 +4,22 @@ import { Icon } from "./Icon";
 
 const releases = [
   {
+    version: "0.3.1",
+    date: "2026-11-16",
+    label: "16 de novembro de 2026",
+    sections: [
+      {
+        title: "Compartilhamento",
+        changes: [
+          "Teste opcional de imagem e áudio antes de entrar ao vivo ou trocar de tela, com prévia privada e medidor de som.",
+          "Avisos de conexão instável com atalhos para ativar o modo econômico ou reduzir a qualidade do envio.",
+          "Pausa de imagem e som do jogo com aviso para quem assiste. A transmissão pode ser retomada na mesma sala.",
+          "Quem compartilha pode liberar marcações temporárias na imagem para os espectadores.",
+        ],
+      },
+    ],
+  },
+  {
     version: "0.2.0-beta.1",
     date: "2026-11-12",
     label: "12 de novembro de 2026",
@@ -22,10 +38,6 @@ const releases = [
       {
         title: "Compartilhamento e câmera",
         changes: [
-          "Teste opcional de imagem e áudio antes de entrar ao vivo ou trocar de tela, com prévia privada e medidor de som.",
-          "Avisos de conexão instável com atalhos para ativar o modo econômico ou reduzir a qualidade do envio.",
-          "Pausa de imagem e som do jogo com aviso para quem assiste. A transmissão pode ser retomada na mesma sala.",
-          "Quem compartilha pode liberar marcações temporárias na imagem para os espectadores.",
           "Resolução de 1920 × 1080 e opções de 48 e 60 FPS, com aviso em vermelho para configurações pesadas.",
           "Troca de tela, resolução e FPS durante a transmissão pelo menu na seta ao lado de Parar transmissão.",
           "Modo econômico por espectador.",
