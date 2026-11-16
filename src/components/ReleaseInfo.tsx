@@ -4,6 +4,19 @@ import { Icon } from "./Icon";
 
 const releases = [
   {
+    version: "0.3.4",
+    date: "2026-11-16",
+    label: "16 de novembro de 2026",
+    sections: [
+      {
+        title: "Informações institucionais",
+        changes: [
+          "A página pública Sobre o StreamLite apresenta o projeto, sua missão e um link de e-mail para dúvidas e sugestões. Ela pode ser aberta pela tela de acesso ou pelo rodapé do catálogo de salas.",
+        ],
+      },
+    ],
+  },
+  {
     version: "0.3.3",
     date: "2026-11-16",
     label: "16 de novembro de 2026",

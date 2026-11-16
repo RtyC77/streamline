@@ -27,6 +27,9 @@
 }
 .account-card { width: min(100%, 440px); }
 .account-card h1 { font-size: 24px; margin: 0 0 20px; }
+.about-card { width: min(100%, 680px); line-height: 1.6; }
+.about-card section { margin-top: 24px; }
+.about-card h2 { font-size: 18px; margin: 0 0 8px; }
 .account-card .account-check {
   display: flex;
   align-items: center;
@@ -650,6 +653,7 @@ h2 {
 }
 .home-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 20px;
   padding: 8px 20px;
