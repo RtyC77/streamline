@@ -9,6 +9,7 @@ import {RoomCapacity,DEFAULT_CAPACITY} from '../components/RoomCapacity';
 import { ReleaseInfo } from "../components/ReleaseInfo";
 
 type EntryDialog =
+  | { kind: "create" }
   | { kind: "invite" }
   | { kind: "link"; destination: string }
   | { kind: "password"; destination: string; name?: string };
@@ -46,6 +47,7 @@ export function HomePage({
   const [joinError, setJoinError] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
+  const [editingName, setEditingName] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const busy = pending !== null;
   const [capacity, setCapacity] = useState(DEFAULT_CAPACITY);
@@ -136,6 +138,18 @@ export function HomePage({
           <ReleaseInfo />
         </div>
         <div className="account-actions">
+          {profile.can_create_rooms && (
+            <button className="primary" type="button" aria-haspopup="dialog" disabled={busy || !configured}
+              onClick={() => {
+                setAccess("public");
+                setPassword("");
+                setCapacity(DEFAULT_CAPACITY);
+                setCreateError("");
+                openEntry({ kind: "create" });
+              }}>
+              <Icon name="plus" size={16} /> Criar sala
+            </button>
+          )}
           <details className="account-profile">
             <summary className="account-control">
               <Icon name="user" size={16} />
@@ -144,7 +158,12 @@ export function HomePage({
             </summary>
             <div>
               <p>{email}</p>
-              {nickname.toLowerCase() !== "rod" && <form onSubmit={async (event) => {
+              {nickname.toLowerCase() !== "rod" && <button className="text-action" type="button"
+                aria-expanded={editingName} onClick={() => {
+                  setEditingName(value => !value);
+                  setProfileMessage("");
+                }} disabled={savingProfile}>Alterar nome de usuário</button>}
+              {nickname.toLowerCase() !== "rod" && editingName && <form onSubmit={async (event) => {
                 event.preventDefault();
                 if (savingProfile) return;
                 const name = String(new FormData(event.currentTarget).get("username") ?? "");
@@ -153,6 +172,7 @@ export function HomePage({
                 try {
                   const saved = await updateOwnUsername(name);
                   setProfileMessage(`Nome salvo como ${saved}.`);
+                  setEditingName(false);
                 } catch (cause) {
                   setProfileMessage(explain(cause));
                 } finally {
@@ -160,7 +180,7 @@ export function HomePage({
                 }
               }}>
                 <label htmlFor="profile-username">Nome de usuário</label>
-                <input key={nickname} id="profile-username" name="username" defaultValue={nickname}
+                <input autoFocus key={nickname} id="profile-username" name="username" defaultValue={nickname}
                   pattern={String.raw`[A-Za-z0-9_.\-]{2,24}`} required maxLength={24} disabled={savingProfile} />
                 <button className="secondary" disabled={savingProfile}>Salvar</button>
               </form>}
@@ -170,39 +190,7 @@ export function HomePage({
           {accountActions}
         </div>
       </header>
-      <main className={`home-main${profile.can_create_rooms ? "" : " home-main--directory"}`}>
-        {profile.can_create_rooms && (
-          <section className="entry-card" aria-labelledby="create-room-title">
-            <h2 id="create-room-title">Criar sala</h2>
-            <form onSubmit={event => {
-              event.preventDefault();
-              setCreateError("");
-              void requestRoom("create", () => createListedRoom(nickname, capacity, access, password),
-                cause => setCreateError(explain(cause)));
-            }}>
-              <label htmlFor="room-access">Acesso à sala</label>
-              <select id="room-access" value={access} disabled={busy} onChange={(e) => { setAccess(e.target.value === "private" ? "private" : "public"); setPassword(""); }}>
-                <option value="public">Pública</option>
-                <option value="private">Privada</option>
-              </select>
-              <RoomCapacity value={capacity} onChange={setCapacity} disabled={busy} />
-              {access === "private" && (
-                <>
-                  <label htmlFor="create-room-password">Senha da sala</label>
-                  <input id="create-room-password" type="password" autoComplete="new-password"
-                    value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy}
-                    required minLength={4} maxLength={72} />
-                </>
-              )}
-              <button className="primary wide" type="submit" disabled={busy || !configured}>
-                <Icon name="plus" />
-                {pending === "create" ? "Criando sala…" : "Criar sala"}
-                <Icon name="arrow" size={18} />
-              </button>
-            </form>
-            {createError && <div className="error" role="alert">{createError}</div>}
-          </section>
-        )}
+      <main className="home-main">
         <section className="room-directory" aria-labelledby="room-directory-title">
           <header className="room-directory-header">
             <h1 id="room-directory-title"><Icon name="users" size={22} /> Salas disponíveis</h1>
@@ -260,7 +248,46 @@ export function HomePage({
           )}
         </section>
       </main>
-      {entryDialog && (
+      {entryDialog?.kind === "create" ? (
+        <dialog ref={modal} className="room-entry-dialog" aria-labelledby="create-room-title" onCancel={event => {
+          event.preventDefault();
+          closeEntry();
+        }}>
+          <h2 id="create-room-title">Criar sala</h2>
+          <form onSubmit={event => {
+            event.preventDefault();
+            setCreateError("");
+            void requestRoom("create", () => createListedRoom(nickname, capacity, access, password),
+              cause => setCreateError(explain(cause)));
+          }}>
+            <label htmlFor="room-access">Acesso à sala</label>
+            <select id="room-access" value={access} disabled={busy} onChange={event => {
+              setAccess(event.target.value === "private" ? "private" : "public");
+              setPassword("");
+            }}>
+              <option value="public">Pública</option>
+              <option value="private">Privada</option>
+            </select>
+            <RoomCapacity value={capacity} onChange={setCapacity} disabled={busy} />
+            {access === "private" && (
+              <>
+                <label htmlFor="create-room-password">Senha da sala</label>
+                <input id="create-room-password" type="password" autoComplete="new-password"
+                  value={password} onChange={event => setPassword(event.target.value)} disabled={busy}
+                  required minLength={4} maxLength={72} />
+              </>
+            )}
+            {createError && <div className="error" role="alert">{createError}</div>}
+            <div className="room-entry-actions">
+              <button className="secondary" type="button" disabled={busy} onClick={closeEntry}>Cancelar</button>
+              <button className="primary" type="submit" disabled={busy || !configured}>
+                <Icon name="plus" size={17} />
+                {pending === "create" ? "Criando sala…" : "Criar sala"}
+              </button>
+            </div>
+          </form>
+        </dialog>
+      ) : entryDialog && (
         <dialog ref={modal} className="room-entry-dialog" aria-labelledby="room-entry-title" onCancel={event => {
           event.preventDefault();
           closeEntry();

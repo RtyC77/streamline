@@ -132,6 +132,34 @@
 }
 .admin-identity { min-width: 0; overflow-wrap: anywhere; }
 .admin-page button { min-height: 44px; padding: 8px 14px; }
+button.text-action,
+.admin-page button.text-action {
+  min-height: 0;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: #9ba8ff;
+  font-size: 13px;
+}
+button.text-action:not(:disabled):hover { text-decoration: underline; }
+.admin-refresh {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 8px 0;
+}
+.admin-refresh span, .audit-day summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.audit-day {
+  margin-block: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.audit-day summary { cursor: pointer; font-weight: 600; }
 .admin-sections svg { flex: none; }
 .admin-sections [aria-pressed=true] {
   border-color: var(--accent);
@@ -413,12 +441,9 @@ h2 {
 }
 .home-main {
   display: grid;
-  grid-template-columns: clamp(290px, 22vw, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
   flex: 1;
-}
-.home-main--directory {
-  grid-template-columns: minmax(0, 1fr);
 }
 .entry-card {
   min-width: 0;
@@ -427,7 +452,7 @@ h2 {
   background: var(--sidebar);
   border-right: 1px solid var(--border);
 }
-.entry-card select {
+.room-entry-dialog select {
   width: 100%;
   padding: 10px;
   color: inherit;

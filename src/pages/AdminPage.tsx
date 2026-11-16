@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Brand, Icon } from "../components/Icon";
 import {
   closeStaffRoom, confirmUserEmail, staffAudit, staffRooms, staffUsers, updateUser,
@@ -20,6 +20,8 @@ const actionNames: Record<string, string> = {
   confirm_email: "Liberar acesso sem e-mail",
 };
 const pageSize = 25;
+const refreshSeconds = 30;
+const dayLabel = new Intl.DateTimeFormat("pt-BR", { dateStyle: "long" });
 
 function date(value: string | null) {
   return value ? new Date(value).toLocaleString("pt-BR") : "Indisponível";
@@ -46,33 +48,52 @@ export function AdminPage({ profile, logout }: { profile: Profile; logout: () =>
   const [rooms, setRooms] = useState<StaffRoom[]>([]);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
+  const refreshAt = useRef(Date.now() + refreshSeconds * 1000);
+  const [seconds, setSeconds] = useState(refreshSeconds);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const superadmin = profile.role === "superadmin";
+  const refresh = useCallback(() => {
+    refreshAt.current = Date.now() + refreshSeconds * 1000;
+    setSeconds(refreshSeconds);
+    setRevision(value => value + 1);
+  }, []);
+
+  useEffect(() => {
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((refreshAt.current - Date.now()) / 1000));
+      setSeconds(remaining);
+      if (!remaining && !refreshing && !acting) refresh();
+    };
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [acting, refresh, refreshing]);
 
   useEffect(() => {
     let disposed = false;
-    setLoading(true);
+    setRefreshing(true);
     const offset = page * pageSize;
     const timer = setTimeout(() => {
       async function load() {
-        try {
-          if (tab === "users") {
-            const result = await staffUsers(search.trim(), status, role, offset);
-            if (!disposed) setUsers(result);
-          } else if (tab === "audit") {
-            const result = await staffAudit(offset);
-            if (!disposed) setAudit(result);
-          } else if (superadmin) {
-            const result = await staffRooms();
-            if (!disposed) setRooms(result);
-          }
-        } catch (cause) {
-          if (!disposed) setError(explain(cause));
-        } finally {
-          if (!disposed) setLoading(false);
-        }
+        const [usersResult, auditResult, roomsResult] = await Promise.allSettled([
+          staffUsers(search.trim(), status, role, tab === "users" ? offset : 0),
+          staffAudit(tab === "audit" ? offset : 0),
+          superadmin ? staffRooms() : Promise.resolve([]),
+        ]);
+        if (disposed) return;
+        if (usersResult.status === "fulfilled") setUsers(usersResult.value);
+        if (auditResult.status === "fulfilled") setAudit(auditResult.value);
+        if (roomsResult.status === "fulfilled") setRooms(roomsResult.value);
+        setLoadErrors({
+          users: usersResult.status === "rejected" ? explain(usersResult.reason) : "",
+          audit: auditResult.status === "rejected" ? explain(auditResult.reason) : "",
+          rooms: roomsResult.status === "rejected" ? explain(roomsResult.reason) : "",
+        });
+        setLoading(false);
+        setRefreshing(false);
       }
       void load();
     }, tab === "users" ? 200 : 0);
@@ -104,7 +125,7 @@ export function AdminPage({ profile, logout }: { profile: Profile; logout: () =>
     } catch (cause) {
       setError(explain(cause));
     } finally {
-      setRevision((value) => value + 1);
+      refresh();
       setActing(false);
     }
   }
@@ -117,6 +138,19 @@ export function AdminPage({ profile, logout }: { profile: Profile; logout: () =>
         void run(() => updateUser(user, action), "Conta atualizada.");
       }}>{label}</button>;
   }
+
+  const auditDays = new Map<string, AuditEntry[]>();
+  for (const entry of audit.slice(0, pageSize)) {
+    const day = dayLabel.format(new Date(entry.created_at));
+    const entries = auditDays.get(day) ?? [];
+    entries.push(entry);
+    auditDays.set(day, entries);
+  }
+  const refreshControl = <div className="admin-refresh">
+    <button className="text-action" type="button" disabled={loading || refreshing || acting}
+      onClick={() => { setError(""); refresh(); }}>Atualizar</button>
+    <span>{refreshing ? "Atualizando…" : `Próxima atualização em ${seconds}s`}</span>
+  </div>;
 
   return <div className="admin-page">
     <header className="home-header">
@@ -135,13 +169,14 @@ export function AdminPage({ profile, logout }: { profile: Profile; logout: () =>
         <button className="secondary" aria-pressed={tab === "users"} onClick={() => changeTab("users")}><Icon name="users" size={16} /> Usuários</button>
         <button className="secondary" aria-pressed={tab === "audit"} onClick={() => changeTab("audit")}><Icon name="chart" size={16} /> Histórico</button>
         {superadmin && <button className="secondary" aria-pressed={tab === "rooms"} onClick={() => changeTab("rooms")}><Icon name="screen" size={16} /> Salas ativas</button>}
-        <button className="secondary" disabled={loading || acting}
-          onClick={() => { setError(""); setRevision((value) => value + 1); }}>Atualizar</button>
       </nav>
       {tab === "users" && <div className="admin-filters">
-        <label>Nome ou e-mail
-          <input type="search" maxLength={254} value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); setError(""); }} />
-        </label>
+        <div>
+          <label>Nome ou e-mail
+            <input type="search" maxLength={254} value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); setError(""); }} />
+          </label>
+          {refreshControl}
+        </div>
         <label>Status
           <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); setError(""); }}>
             <option value="">Todos</option><option value="active">Ativa</option><option value="blocked">Bloqueada</option>
@@ -154,7 +189,9 @@ export function AdminPage({ profile, logout }: { profile: Profile; logout: () =>
           </select>
         </label>
       </div>}
+      {tab !== "users" && refreshControl}
       {error && <p className="error" role="alert">{error}</p>}
+      {loadErrors[tab] && <p className="error" role="alert">{loadErrors[tab]}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
       {loading ? <p role="status">Carregando…</p> : tab === "users" ? <>
         {!users.length && <p>Nenhum usuário nesta página.</p>}
@@ -191,8 +228,10 @@ export function AdminPage({ profile, logout }: { profile: Profile; logout: () =>
         <Pagination page={page} more={users.length > pageSize} change={changePage} />
       </> : tab === "audit" ? <>
         {!audit.length && <p>Nenhum registro nesta página.</p>}
-        <ul className="admin-list">
-          {audit.slice(0, pageSize).map((entry) => <li key={entry.id}>
+        {[...auditDays].map(([day, entries]) => <details className="audit-day" key={day}>
+          <summary>{day} <span>· {entries.length} {entries.length === 1 ? "registro" : "registros"}</span></summary>
+          <ul className="admin-list">
+          {entries.map((entry) => <li key={entry.id}>
             <h2>{actionNames[entry.action] ?? entry.action}</h2>
             <p>{entry.actor_name} → {entry.target_name} · {date(entry.created_at)}</p>
             <dl>
@@ -200,7 +239,8 @@ export function AdminPage({ profile, logout }: { profile: Profile; logout: () =>
               <div><dt>Novo estado</dt><dd><code>{JSON.stringify(entry.new_state)}</code></dd></div>
             </dl>
           </li>)}
-        </ul>
+          </ul>
+        </details>)}
         <Pagination page={page} more={audit.length > pageSize} change={changePage} />
       </> : superadmin && <>
         {!rooms.length && <p>Nenhuma sala ativa.</p>}

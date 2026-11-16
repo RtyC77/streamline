@@ -4,6 +4,33 @@ import { Icon } from "./Icon";
 
 const releases = [
   {
+    version: "0.3.3",
+    date: "2026-11-16",
+    label: "16 de novembro de 2026",
+    sections: [
+      {
+        title: "Salas e convites",
+        changes: [
+          "O botão Criar sala no topo abre um modal com as opções de acesso, senha e limite de pessoas. O catálogo ocupa o espaço da antiga lateral.",
+        ],
+      },
+      {
+        title: "Interface e perfil",
+        changes: [
+          "O ícone do StreamLite aparece na aba do navegador.",
+          "O menu do perfil oferece a opção Alterar nome de usuário para abrir o formulário de edição.",
+        ],
+      },
+      {
+        title: "Administração",
+        changes: [
+          "O atalho Atualizar fica abaixo da busca por nome ou e-mail. A contagem mostra quando usuários, histórico e salas ativas serão atualizados automaticamente, a cada 30 segundos.",
+          "O histórico agrupa os registros por dia em seções que podem ser abertas e fechadas.",
+        ],
+      },
+    ],
+  },
+  {
     version: "0.3.2",
     date: "2026-11-16",
     label: "16 de novembro de 2026",
