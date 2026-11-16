@@ -4,6 +4,26 @@ import { Icon } from "./Icon";
 
 const releases = [
   {
+    version: "0.3.2",
+    date: "2026-11-16",
+    label: "16 de novembro de 2026",
+    sections: [
+      {
+        title: "Salas e convites",
+        changes: [
+          "Entre em salas públicas com um clique no catálogo. Em salas privadas, o botão Entrar abre uma janela para digitar a senha.",
+          "A lateral fica dedicada à criação de salas. Links e códigos de convite continuam disponíveis pelo catálogo.",
+        ],
+      },
+      {
+        title: "Compartilhamento",
+        changes: [
+          "O menu Opções reúne pausa e retomada, edição da transmissão e permissão para marcações dos espectadores.",
+        ],
+      },
+    ],
+  },
+  {
     version: "0.3.1",
     date: "2026-11-16",
     label: "16 de novembro de 2026",

@@ -1,12 +1,18 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Brand, Icon } from "../components/Icon";
 import { configured } from "../config";
-import { CREATE_ROOM_DENIED, updateOwnUsername, type Profile } from "../services/accounts";
+import { updateOwnUsername, type Profile } from "../services/accounts";
 import { createListedRoom, enter, inviteLink, isRoomId, joinListedRoom, listRooms, parseRoomLink, type ListedRoom } from "../services/rooms";
 import { explain } from "../services/errors";
 import type { Entry } from "../types";
 import {RoomCapacity,DEFAULT_CAPACITY} from '../components/RoomCapacity';
 import { ReleaseInfo } from "../components/ReleaseInfo";
+
+type EntryDialog =
+  | { kind: "invite" }
+  | { kind: "link"; destination: string }
+  | { kind: "password"; destination: string; name?: string };
+
 export function HomePage({
   onEnter,
   message,
@@ -21,25 +27,35 @@ export function HomePage({
   accountActions: ReactNode;
 }) {
   const nickname = profile.username;
-  const [invite, setInvite] = useState(
-    () => new URLSearchParams(location.hash.slice(1)).get("convite") ?? "",
-  );
-  const [target, setTarget] = useState<{ id: string; name?: string; private?: boolean } | null>(() => {
-    const id = new URLSearchParams(location.hash.slice(1)).get("sala");
-    return id && isRoomId(id) ? { id } : null;
+  const [entryDialog, setEntryDialog] = useState<EntryDialog | null>(() => {
+    const params = new URLSearchParams(location.hash.slice(1));
+    const id = params.get("sala");
+    const destination = id && isRoomId(id) ? id : params.get("convite");
+    return destination ? { kind: "link", destination } : null;
   });
-  const [joinSelected, setJoining] = useState(() => Boolean(target || invite));
-  const joining = joinSelected || !profile.can_create_rooms;
+  const modal = useRef<HTMLDialogElement>(null);
+  const requestInProgress = useRef(false);
+  const [entryValue, setEntryValue] = useState("");
+  const [entryError, setEntryError] = useState("");
   const [access, setAccess] = useState<"public" | "private">("public");
   const [password, setPassword] = useState("");
   const [rooms, setRooms] = useState<ListedRoom[] | null>(null);
   const [directoryError, setDirectoryError] = useState("");
   const [page, setPage] = useState(0);
-  const [error, setError] = useState("");
+  const [createError, setCreateError] = useState("");
+  const [joinError, setJoinError] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<string | null>(null);
+  const busy = pending !== null;
   const [capacity, setCapacity] = useState(DEFAULT_CAPACITY);
+  const modalOpen = entryDialog !== null;
+  useEffect(() => {
+    const dialog = modal.current;
+    if (!modalOpen || !dialog) return;
+    dialog.showModal();
+    return () => dialog.close();
+  }, [modalOpen]);
   useEffect(() => {
     if (!configured) return;
     let active = true;
@@ -60,37 +76,57 @@ export function HomePage({
     void refresh();
     return () => { active = false; clearTimeout(timer); };
   }, [page]);
-  const changeMode = (join: boolean) => {
-    setJoining(join);
-    setPassword("");
-    setError("");
+  const openEntry = (dialog: EntryDialog) => {
+    setEntryValue("");
+    setEntryError("");
+    setJoinError("");
+    setEntryDialog(dialog);
   };
-  const selectRoom = (room: ListedRoom) => {
-    changeMode(true);
-    setTarget(room.access_mode === "invite" ? null : {
-      id: room.id, name: room.name, private: room.access_mode === "private",
-    });
+  const closeEntry = () => {
+    if (requestInProgress.current) return;
+    modal.current?.close();
+    setEntryDialog(null);
+    setEntryValue("");
+    setEntryError("");
   };
-  const enterRoom = async (join: boolean) => {
-    if (busy) return;
-    setBusy(true);
-    setError("");
+  const requestRoom = async (key: string, load: () => Promise<Entry>, onError: (cause: unknown) => void, destination?: string) => {
+    if (!configured || requestInProgress.current) return;
+    requestInProgress.current = true;
+    setPending(key);
     try {
-      if (!join && !profile.can_create_rooms) throw new Error(CREATE_ROOM_DENIED);
-      const destination = join ? target?.id ?? parseRoomLink(invite) : null;
-      const data = destination
-        ? isRoomId(destination)
-          ? await joinListedRoom(destination, nickname, password)
-          : await enter(nickname, destination)
-        : await createListedRoom(nickname, capacity, access, password);
+      const data = await load();
       const normalized = destination ?? data.room.id;
       history.replaceState(null, "", inviteLink(normalized));
       onEnter(data, normalized);
     } catch (e) {
-      setError(explain(e));
+      onError(e);
     } finally {
-      setBusy(false);
+      requestInProgress.current = false;
+      setPending(null);
     }
+  };
+  const joinRoom = (destination: string, options: { password?: string; name?: string; fromDialog?: boolean } = {}) => {
+    const { password, name, fromDialog } = options;
+    setJoinError("");
+    setEntryError("");
+    void requestRoom(destination, () => isRoomId(destination)
+      ? joinListedRoom(destination, nickname, password ?? "")
+      : enter(nickname, destination), cause => {
+        const feedback = explain(cause);
+        if (isRoomId(destination) && password === undefined && feedback === "Senha da sala incorreta.") {
+          openEntry({ kind: "password", destination, name });
+        } else if (fromDialog) {
+          setEntryError(feedback);
+        } else {
+          setJoinError(feedback);
+        }
+      }, destination);
+  };
+  const selectRoom = (room: ListedRoom) => {
+    if (requestInProgress.current) return;
+    if (room.access_mode === "public") joinRoom(room.id, { name: room.name });
+    else if (room.access_mode === "private") openEntry({ kind: "password", destination: room.id, name: room.name });
+    else openEntry({ kind: "invite" });
   };
   return (
     <div className="home">
@@ -134,71 +170,46 @@ export function HomePage({
           {accountActions}
         </div>
       </header>
-      <main className="home-main">
-        <section className="entry-card" aria-label="Criar ou entrar em uma sala">
-          <nav className="entry-nav" aria-label="Opções da sala">
-            <button type="button" aria-pressed={!joining} disabled={busy || !profile.can_create_rooms} onClick={() => changeMode(false)}><Icon name="plus" size={19} /> Criar sala</button>
-            <button type="button" aria-pressed={joining} disabled={busy} onClick={() => changeMode(true)}><Icon name="link" size={19} /> Entrar na sala</button>
-          </nav>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (configured && (!joining || target || invite.trim())) void enterRoom(joining);
-            }}
-          >
-            {!profile.can_create_rooms && <p className="notice">{CREATE_ROOM_DENIED}</p>}
-            {joining && target ? (
-              <div className="selected-room">
-                <strong>{target.name ?? "Sala do link"}</strong>
-                <button className="secondary" type="button" disabled={busy} onClick={() => { setTarget(null); setPassword(""); }}>Trocar sala</button>
-              </div>
-            ) : joining ? (
-              <>
-                <label htmlFor="invite">Recebeu um convite?</label>
-                <div className="input-icon">
-                  <Icon name="link" size={18} />
-                  <input
-                    id="invite"
-                    required
-                    placeholder="Cole o link ou código de convite"
-                    autoComplete="off"
-                    value={invite}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setInvite(value);
-                      try {
-                        const destination = parseRoomLink(value);
-                        if (isRoomId(destination)) setTarget({ id: destination });
-                      } catch { /* Keep accepting legacy invite codes and partial input. */ }
-                    }}
-                    disabled={busy}
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <label htmlFor="room-access">Acesso à sala</label>
-                <select id="room-access" value={access} disabled={busy} onChange={(e) => { setAccess(e.target.value === "private" ? "private" : "public"); setPassword(""); }}>
-                  <option value="public">Pública</option>
-                  <option value="private">Privada</option>
-                </select>
-                <RoomCapacity value={capacity} onChange={setCapacity} disabled={busy} />
-              </>
-            )}
-            {((!joining && access === "private") || (joining && target && target.private !== false)) && (
-              <>
-                <label htmlFor="room-password">{joining && target?.private === undefined ? "Senha, se a sala for privada" : "Senha da sala"}</label>
-                <input id="room-password" type="password" autoComplete={joining ? "current-password" : "new-password"}
-                  value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy}
-                  required={!joining || target?.private === true} minLength={joining ? undefined : 4} maxLength={72} />
-              </>
-            )}
-            <button className="primary wide" type="submit" disabled={busy || !configured || (joining && !target && !invite.trim())}>
-              {!joining && <Icon name="plus" />}
-              {busy ? "Conectando…" : joining ? "Entrar na sala" : "Criar sala"}
-              <Icon name="arrow" size={18} />
+      <main className={`home-main${profile.can_create_rooms ? "" : " home-main--directory"}`}>
+        {profile.can_create_rooms && (
+          <section className="entry-card" aria-labelledby="create-room-title">
+            <h2 id="create-room-title">Criar sala</h2>
+            <form onSubmit={event => {
+              event.preventDefault();
+              setCreateError("");
+              void requestRoom("create", () => createListedRoom(nickname, capacity, access, password),
+                cause => setCreateError(explain(cause)));
+            }}>
+              <label htmlFor="room-access">Acesso à sala</label>
+              <select id="room-access" value={access} disabled={busy} onChange={(e) => { setAccess(e.target.value === "private" ? "private" : "public"); setPassword(""); }}>
+                <option value="public">Pública</option>
+                <option value="private">Privada</option>
+              </select>
+              <RoomCapacity value={capacity} onChange={setCapacity} disabled={busy} />
+              {access === "private" && (
+                <>
+                  <label htmlFor="create-room-password">Senha da sala</label>
+                  <input id="create-room-password" type="password" autoComplete="new-password"
+                    value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy}
+                    required minLength={4} maxLength={72} />
+                </>
+              )}
+              <button className="primary wide" type="submit" disabled={busy || !configured}>
+                <Icon name="plus" />
+                {pending === "create" ? "Criando sala…" : "Criar sala"}
+                <Icon name="arrow" size={18} />
+              </button>
+            </form>
+            {createError && <div className="error" role="alert">{createError}</div>}
+          </section>
+        )}
+        <section className="room-directory" aria-labelledby="room-directory-title">
+          <header className="room-directory-header">
+            <h1 id="room-directory-title"><Icon name="users" size={22} /> Salas disponíveis</h1>
+            <button className="secondary" type="button" aria-haspopup="dialog" disabled={busy || !configured} onClick={() => openEntry({ kind: "invite" })}>
+              <Icon name="link" size={16} /> Usar convite
             </button>
-          </form>
+          </header>
           {!configured && (
             <div className="notice">
               Configure as variáveis do Supabase em <code>.env</code> para criar
@@ -210,14 +221,11 @@ export function HomePage({
               {message}
             </div>
           )}
-          {error && (
+          {joinError && (
             <div className="error" role="alert">
-              {error}
+              {joinError}
             </div>
           )}
-        </section>
-        <section className="room-directory" aria-labelledby="room-directory-title">
-          <h1 id="room-directory-title"><Icon name="users" size={22} /> Salas disponíveis</h1>
           {directoryError && <p role="status">Não foi possível carregar as salas. {directoryError}</p>}
           {configured && !rooms && !directoryError && <p role="status">Carregando salas…</p>}
           {rooms?.length === 0 && <p className="directory-empty">Nenhuma sala disponível nesta página.</p>}
@@ -238,8 +246,8 @@ export function HomePage({
                     </ul>
                   )}
                 </div>
-                <button className="secondary" type="button" disabled={busy} onClick={() => selectRoom(room)}>
-                  {room.access_mode === "invite" ? "Usar convite" : "Entrar"}
+                <button className="secondary" type="button" disabled={busy} onClick={() => selectRoom(room)} aria-haspopup={room.access_mode !== "public" ? "dialog" : undefined}>
+                  {room.access_mode === "invite" ? "Usar convite" : pending === room.id ? "Entrando…" : "Entrar"}
                 </button>
               </li>
             ))}
@@ -252,6 +260,42 @@ export function HomePage({
           )}
         </section>
       </main>
+      {entryDialog && (
+        <dialog ref={modal} className="room-entry-dialog" aria-labelledby="room-entry-title" onCancel={event => {
+          event.preventDefault();
+          closeEntry();
+        }}>
+          <h2 id="room-entry-title">{entryDialog.kind === "invite" ? "Usar convite" :
+            entryDialog.kind === "password" && entryDialog.name ? `Entrar em ${entryDialog.name}` : "Entrar na sala"}</h2>
+          <form onSubmit={event => {
+            event.preventDefault();
+            try {
+              const destination = parseRoomLink(entryDialog.kind === "invite" ? entryValue : entryDialog.destination);
+              joinRoom(destination, entryDialog.kind === "password"
+                ? { password: entryValue, name: entryDialog.name, fromDialog: true }
+                : { fromDialog: true });
+            } catch (cause) {
+              setEntryError(explain(cause));
+            }
+          }}>
+            {entryDialog.kind !== "link" && (
+              <>
+                <label htmlFor="room-entry-value">{entryDialog.kind === "password" ? "Senha da sala" : "Link ou código de convite"}</label>
+                <input key={entryDialog.kind} id="room-entry-value" autoFocus
+                  type={entryDialog.kind === "password" ? "password" : "text"}
+                  autoComplete={entryDialog.kind === "password" ? "current-password" : "off"}
+                  maxLength={entryDialog.kind === "password" ? 72 : undefined}
+                  value={entryValue} disabled={busy} required onChange={event => setEntryValue(event.target.value)} />
+              </>
+            )}
+            {entryError && <div className="error" role="alert">{entryError}</div>}
+            <div className="room-entry-actions">
+              <button className="secondary" type="button" disabled={busy} onClick={closeEntry}>Cancelar</button>
+              <button className="primary" type="submit" disabled={busy || !configured}>{busy ? "Entrando…" : "Entrar na sala"}</button>
+            </div>
+          </form>
+        </dialog>
+      )}
       <footer className="home-footer">
         <span>
           Chrome ou Edge no Windows <span className="footer-separator">/</span>{" "}

@@ -417,6 +417,9 @@ h2 {
   min-height: 0;
   flex: 1;
 }
+.home-main--directory {
+  grid-template-columns: minmax(0, 1fr);
+}
 .entry-card {
   min-width: 0;
   overflow: auto;
@@ -437,11 +440,19 @@ h2 {
   overflow: auto;
   padding: 20px clamp(16px, 2vw, 36px);
 }
+.room-directory-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
 .room-directory h1 {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 0 20px;
+  margin: 0;
   font-size: 19px;
 }
 .room-directory h1 svg {
@@ -475,13 +486,6 @@ h2 {
 .room-directory-list {
   display: grid;
   gap: 14px;
-}
-.selected-room {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
 }
 .room-directory-list > li {
   display: grid;
@@ -533,22 +537,16 @@ h2 {
     border-bottom: 1px solid var(--border);
   }
 }
-.entry-nav {
-  display: grid;
-  gap: 4px;
-  margin-bottom: 20px;
+.room-entry-dialog h2 {
+  margin: 0 0 16px;
+  overflow-wrap: anywhere;
 }
-.entry-nav button {
-  justify-content: flex-start;
-  padding: 8px 10px;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--muted);
-  text-align: left;
-}
-.entry-nav [aria-pressed="true"] {
-  background: var(--raised);
-  color: var(--accent-ink);
+.room-entry-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
 }
 .mini-tag {
   font-size: 9px;
@@ -590,18 +588,6 @@ h2 {
   width: 100%;
   height: 1px;
   background: var(--border);
-}
-.input-icon {
-  position: relative;
-}
-.input-icon > svg {
-  position: absolute;
-  left: 14px;
-  top: 15px;
-  color: #768396;
-}
-.input-icon > input {
-  padding-left: 42px;
 }
 .entry-card form > .secondary {
   margin-top: 12px;
@@ -1128,22 +1114,40 @@ h2 {
 }
 .broadcast-menu:not([hidden]) {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
-.broadcast-menu button[aria-pressed="true"] { border-color: var(--accent-text); }
 .broadcast-actions > button:focus-visible {
   z-index: 1;
 }
 .broadcast-menu {
   position: absolute;
-  inset-block-start: calc(100% + 6px);
-  inset-inline-end: 0;
+  inset-block-end: calc(100% + 6px);
+  inset-inline-start: 0;
+  inline-size: max-content;
+  max-inline-size: min(290px, calc(100vw - 32px));
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px #0007;
   z-index: 5;
 }
 .broadcast-menu button {
-  white-space: nowrap;
-  box-shadow: 0 6px 16px #0006;
+  min-width: 0;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
 }
+.broadcast-menu button svg { flex-shrink: 0; }
+.broadcast-menu button:hover,
+.broadcast-menu button[aria-pressed="true"] { background: var(--raised); }
+.broadcast-menu button[aria-pressed="true"] { color: var(--accent-text); }
+.broadcast-menu-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 .volume {
   display: flex;
   align-items: center;
@@ -1577,10 +1581,6 @@ dialog {
     padding-block: 8px;
   }
 
-  .input-icon > svg {
-    top: 9px;
-  }
-
   .entry-card .room-capacity {
     margin-block: 8px;
     padding: 8px;
@@ -1606,10 +1606,6 @@ dialog {
   .room-layout {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "workspace";
-  }
-
-  .entry-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .sidebar {

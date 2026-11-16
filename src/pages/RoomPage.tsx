@@ -562,7 +562,7 @@ export function RoomPage({
                 </button>
                 <button
                   type="button"
-                  className="danger broadcast-menu-toggle"
+                  className="secondary broadcast-menu-toggle"
                   ref={broadcastMenuToggle}
                   disabled={sharingBusy}
                   aria-label="Opções da transmissão"
@@ -570,10 +570,19 @@ export function RoomPage({
                   aria-controls="broadcast-menu"
                   onClick={() => setBroadcastMenuOpen(open => !open)}
                 >
+                  Opções
                   <Icon name="chevronDown" size={16} />
                 </button>
                 <div id="broadcast-menu" className="broadcast-menu" hidden={!broadcastMenuOpen}>
-                  <button type="button" className="secondary" onClick={() => {
+                  <button type="button" onClick={() => {
+                    session.current?.setPaused(!media.paused);
+                    setBroadcastMenuOpen(false);
+                    broadcastMenuToggle.current?.focus();
+                  }}>
+                    <Icon name={media.paused ? "play" : "pause"} size={17} />
+                    {media.paused ? "Retomar transmissão" : "Pausar transmissão"}
+                  </button>
+                  <button type="button" onClick={() => {
                     setBroadcastMenuOpen(false);
                     broadcastMenuToggle.current?.focus();
                     setShareOptions(true);
@@ -581,9 +590,11 @@ export function RoomPage({
                     <Icon name="settings" size={17} />
                     Editar transmissão
                   </button>
-                  <button type="button" className="secondary" aria-pressed={media.allowMarks === true}
+                  <button type="button" aria-pressed={media.allowMarks === true}
                     onClick={() => session.current?.setAllowMarks(!media.allowMarks)}>
-                    Permitir marcações dos espectadores
+                    <Icon name="target" size={17} />
+                    <span>Permitir marcações dos espectadores</span>
+                    {media.allowMarks && <Icon name="check" size={16} />}
                   </button>
                 </div>
               </div>
@@ -603,10 +614,6 @@ export function RoomPage({
                 {sharingBusy ? "Preparando…" : "Compartilhar jogo"}
               </button>
             )}
-            {media.sharing && <button type="button" className="secondary" disabled={sharingBusy}
-              onClick={() => session.current?.setPaused(!media.paused)}>
-              {media.paused ? "Retomar transmissão" : "Pausar transmissão"}
-            </button>}
             <button
               className="secondary camera-toggle"
               disabled={cameraBusy || (!ready && !cameraOn)}

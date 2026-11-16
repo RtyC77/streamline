@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react";
 const paths = {
   play: "m9 5 11 7-11 7V5Z",
+  pause: "M9 5v14M15 5v14",
+  target: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
   screen: "M4 4h16v12H4z M8 21h8 M12 16v5",
   plus: "M12 5v14 M5 12h14",
   arrow: "M5 12h14 M13 6l6 6-6 6",
