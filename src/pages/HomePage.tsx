@@ -328,6 +328,7 @@ export function HomePage({
           Chrome ou Edge no Windows <span className="footer-separator">/</span>{" "}
           WebRTC P2P
         </span>
+        <a href="/sobre">Sobre o StreamLite</a>
       </footer>
     </div>
   );
