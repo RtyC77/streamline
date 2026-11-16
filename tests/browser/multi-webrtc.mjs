@@ -20,6 +20,23 @@ try{
  }
  maintenance=setInterval(()=>managers.forEach(m=>void m.maintain()),250);
  await wait(()=>video.readyState>=2&&video.videoWidth>0&&!viewerState?.switching,'primeira transmissão');check(true,'Primeira tela recebida via WebRTC nativo');
+ const pixel = document.createElement('canvas');
+ pixel.width = pixel.height = 1;
+ const pixelContext = pixel.getContext('2d', {willReadFrequently: true});
+ const isBlack = () => {
+  pixelContext.drawImage(video, 0, 0, 1, 1);
+  return pixelContext.getImageData(0, 0, 1, 1).data.slice(0, 3).every(value => value < 12);
+ };
+ managers[0].setPaused(true);
+ await wait(isBlack, 'vídeo em pausa');
+ check(true, 'O receptor recebe vídeo preto quando o transmissor pausa');
+ managers[0].setPaused(false);
+ await wait(() => !isBlack(), 'retomada do vídeo');
+ check(true, 'A imagem volta na mesma transmissão quando o transmissor retoma');
+ managers[0].setAllowMarks(true);
+ managers[3].markScreen({x: 0.25, y: 0.75});
+ await wait(() => viewerState?.mark?.x === 0.25 && viewerState?.mark?.y === 0.75, 'marcação retransmitida');
+ check(true, 'O transmissor autorizado retransmite a posição da marcação');
  await wait(()=>posters.size>=2,'duas prévias');check(true,'Duas prévias entregues por RTCDataChannel sem mídia contínua');
  const last=videoStill(video);check(!!last,'Último quadro capturado uma vez ao trocar de tela');
  managers[3].rememberPreview(sessions[0]);

@@ -14,6 +14,7 @@ describe('Compartilhamento e seleção',()=>{
   const html=renderToStaticMarkup(<ShareOptions onClose={()=>{}} onShare={()=>{}}/>);
   for(const value of [480,720,1080,24,30,48,60])expect(html).toContain(`value="${value}"`);
   expect(html).toContain('Escolher janela e compartilhar');
+  expect(html).toContain('Testar imagem e áudio');
   expect(html).not.toContain('extremamente pesada');
   for(const initial of [{resolution:1080,fps:30},{resolution:720,fps:48},{resolution:720,fps:60}] as const){
    const heavy=renderToStaticMarkup(<ShareOptions initial={initial} onClose={()=>{}} onShare={()=>{}}/>);

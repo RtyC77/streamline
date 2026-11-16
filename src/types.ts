@@ -19,6 +19,13 @@ export interface Snapshot {
   streams?: RoomStream[];
 }
 export interface RoomStream {broadcaster_id:string;session_id:string}
+export interface StreamControls {
+  session: string;
+  paused: boolean;
+  allowMarks: boolean;
+}
+export interface ScreenPoint { x: number; y: number }
+export interface ScreenMark extends ScreenPoint { expiresAt: number }
 export function activeStreams(snapshot:Snapshot):RoomStream[]{
   return snapshot.streams ?? (snapshot.room.broadcaster_id && snapshot.room.stream_session ? [{broadcaster_id:snapshot.room.broadcaster_id,session_id:snapshot.room.stream_session}] : []);
 }
@@ -28,6 +35,7 @@ export interface Entry extends Snapshot {
 export type SignalBody =
   | { kind: "watch"; preview?: boolean; economy?: boolean }
   | { kind: "viewer-quality"; economy: boolean }
+  | ({ kind: "screen-mark" } & ScreenPoint)
   | { kind: "unwatch" }
   | { kind: "ice-batch"; candidates: RTCIceCandidateInit[] }
   | { kind: "offer" | "answer"; sdp: string }
@@ -53,6 +61,7 @@ export interface PeerMetric {
   bitrate?: number;
   codec?: string;
   lost?: number;
+  lossRate?: number;
   rtt?: number;
   dropped?: number;
   route?: string;
@@ -61,6 +70,11 @@ export interface PeerMetric {
   limitation?: string;
 }
 export interface MediaState {
+  suggestEconomy?: boolean;
+  suggestLowerQuality?: boolean;
+  paused?: boolean;
+  allowMarks?: boolean;
+  mark?: ScreenMark;
   switching?: boolean;
   switchTiming?: SwitchTiming;
   connectionIssue?: string;

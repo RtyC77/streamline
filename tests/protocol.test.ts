@@ -10,6 +10,12 @@ const base = {
   client: crypto.randomUUID(),
 };
 describe("Convites e mensagens não confiáveis", () => {
+  it("aceita apenas marcações de tela com coordenadas normalizadas", () => {
+    const mark = { ...base, kind: "screen-mark", x: 0.25, y: 1 };
+    expect(parseSignal(mark)).toEqual(mark);
+    for (const invalid of [{ x: -1 }, { y: 1.1 }, { x: NaN }, { y: "0" }, { media: "camera" }])
+      expect(parseSignal({ ...mark, ...invalid })).toBeNull();
+  });
   it('limita o tamanho dos lotes ICE e rejeita solicitação de prévia inválida',()=>{
     const candidate={candidate:'candidate:x',sdpMid:'0',sdpMLineIndex:0};
     expect(parseSignal({...base,kind:'ice-batch',candidates:[candidate]})).not.toBeNull();

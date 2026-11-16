@@ -3,7 +3,7 @@ import {defaultProfile,type CaptureProfile} from '../media/profile';
 import {firstStill} from '../media/still';
 import { Peers } from "../media/peers";
 import { Cameras } from "../media/cameras";
-import type { CameraView, MediaState, PeerMetric, Snapshot } from "../types";
+import type { CameraView, MediaState, PeerMetric, ScreenPoint, Snapshot, StreamControls } from "../types";
 import {activeStreams} from '../types';
 import { claimStream, leaveRoom, pulse, releaseStream, tabId } from "./rooms";
 import { kickMember } from "./rooms";
@@ -24,6 +24,7 @@ export interface SessionCallbacks {
   expired?: (message: string) => void;
   cameras?: (views: Record<string, CameraView>) => void;
   cameraError?: (message: string) => void;
+  streamControls?: (sender: string, controls: StreamControls) => void;
 }
 export class RoomSession {
   private signaling: Signaling | null = null;
@@ -44,7 +45,17 @@ export class RoomSession {
   private online = new Set<string>();
   private starting = false;
   private captureCleanup:(()=>void)|null=null;
-  private stopCapture(){const cleanup=this.captureCleanup;this.captureCleanup=null;cleanup?.();this.peers?.stopLocal();}
+  private streamControls: StreamControls | null = null;
+  private stopCapture() {
+    const cleanup = this.captureCleanup;
+    this.captureCleanup = null;
+    cleanup?.();
+    this.peers?.stopLocal();
+    if (this.streamControls) {
+      this.streamControls = null;
+      this.signaling?.setStreamControls(null);
+    }
+  }
   private iceRefreshed = Date.now();
   private diagnostics = false;
   private background: BackgroundTimeout | null = null;
@@ -132,6 +143,9 @@ export class RoomSession {
       },
       (id, session, clientId) => this.cameras?.presence(id, session, clientId),
       (success) => this.cameras?.publication(success),
+      (id, controls) => {
+        if (controls) this.callbacks.streamControls?.(id, controls);
+      },
     );
     await this.enqueue(async () => {
       if (this.closed) return;
@@ -369,6 +383,22 @@ export class RoomSession {
   }
   stopCamera() {
     this.cameras?.stop();
+  }
+  private updateStreamControls(changes: Partial<Omit<StreamControls, "session">>) {
+    if (!this.session || this.closed) return;
+    this.streamControls = {
+      session: this.session, paused: false, allowMarks: false, ...this.streamControls, ...changes,
+    };
+    this.signaling?.setStreamControls(this.streamControls);
+  }
+  setPaused(paused: boolean) {
+    if (this.peers?.setPaused(paused)) this.updateStreamControls({ paused });
+  }
+  setAllowMarks(allowMarks: boolean) {
+    if (this.peers?.setAllowMarks(allowMarks)) this.updateStreamControls({ allowMarks });
+  }
+  markScreen(point: ScreenPoint) {
+    if (this.connected && !this.closed) this.peers?.markScreen(point);
   }
   watch(session:string){
     if(this.closed||!this.connected)return false;

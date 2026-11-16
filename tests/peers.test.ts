@@ -316,7 +316,7 @@ describe("Negociação por espectador", () => {
     expect(v.messages.find(s=>s.kind==='ice-batch')).toMatchObject({candidates:expect.arrayContaining([expect.objectContaining({candidate:'candidate:0'})])});
     pc.onicecandidate?.({candidate:{toJSON:()=>({candidate:'late',sdpMid:'0',sdpMLineIndex:0})}});v.manager.dispose();expect(vi.getTimerCount()).toBe(0);
   });
-  it("não coleta getStats do espectador com diagnóstico fechado", async () => {
+  it("aguarda a mídia antes de coletar getStats para avisos com diagnóstico fechado", async () => {
     const v = setup(viewer, vc);
     await v.manager.maintain();
     const stats = vi.spyOn(FakePC.all[0], "getStats");
@@ -325,6 +325,80 @@ describe("Negociação por espectador", () => {
     await v.manager.sample(true);
     expect(stats).toHaveBeenCalledOnce();
     v.manager.dispose();
+  });
+  it("sugere o modo econômico após duas amostras instáveis e limpa o aviso após melhora", async () => {
+    const v = setup(viewer, vc);
+    await v.manager.maintain();
+    const pc = FakePC.all[0];
+    pc.connectionState = "connected";
+    pc.onconnectionstatechange?.();
+    pc.ontrack?.({ track: new FakeTrack() });
+    v.manager.firstFrame(sid, v.states.at(-1)!.remote!);
+    const pair = { currentRoundTripTime: 0.5 };
+    vi.spyOn(pc, "getStats").mockResolvedValue(new Map<string, object>([
+      ["transport", { type: "transport", selectedCandidatePairId: "pair" }],
+      ["pair", pair],
+    ]));
+    await v.manager.sample();
+    expect(v.states.at(-1)?.suggestEconomy).toBe(false);
+    await v.manager.sample();
+    expect(v.states.at(-1)?.suggestEconomy).toBe(true);
+    pair.currentRoundTripTime = 0.1;
+    await v.manager.sample();
+    expect(v.states.at(-1)?.suggestEconomy).toBe(false);
+    v.manager.dispose();
+  });
+  it("mantém vídeo e áudio silenciados ao trocar a fonte ou admitir um espectador durante a pausa", async () => {
+    const h = setup(host, hc);
+    const original = new FakeStream();
+    original.addTrack(new FakeTrack());
+    h.manager.setLocal(original as unknown as MediaStream, sid, "Sem áudio");
+    const watch = () => h.manager.receive(viewer, {
+      kind: "watch", to: host, session: sid, connection: crypto.randomUUID(), client: vc,
+    });
+    watch();
+    await flush();
+    expect(original.tracks[0].enabled).toBe(true);
+    h.manager.setPaused(true);
+    expect(original.tracks[0].enabled).toBe(false);
+    const replacement = new FakeStream();
+    const audio = new FakeTrack();
+    audio.kind = "audio";
+    replacement.addTrack(new FakeTrack());
+    replacement.addTrack(audio);
+    await h.manager.replaceLocal(replacement as unknown as MediaStream, "Com áudio", { resolution: 720, fps: 30 }, null);
+    watch();
+    await flush();
+    expect(replacement.tracks.every(track => !track.enabled)).toBe(true);
+    expect(h.states.at(-1)?.paused).toBe(true);
+    h.manager.setPaused(false);
+    expect(replacement.tracks.every(track => track.enabled)).toBe(true);
+    expect(h.states.at(-1)?.paused).toBe(false);
+    h.manager.dispose();
+  });
+  it("pergunta ao transmissor antes de distribuir marcações e as bloqueia durante a pausa", async () => {
+    const h = setup(host, hc);
+    const stream = new FakeStream();
+    stream.addTrack(new FakeTrack());
+    h.manager.setLocal(stream as unknown as MediaStream, sid, "Sem áudio");
+    const envelope = { to: host, session: sid, connection: crypto.randomUUID(), client: vc };
+    h.manager.receive(viewer, { kind: "watch", ...envelope });
+    await flush();
+    const mark = () => h.manager.receive(viewer, { kind: "screen-mark", x: 0.15, y: 0.8, ...envelope });
+    const marks = () => h.messages.filter(signal => signal.kind === "screen-mark");
+    mark();
+    await flush();
+    expect(marks()).toHaveLength(0);
+    h.manager.setAllowMarks(true);
+    h.manager.setPaused(true);
+    mark();
+    await flush();
+    expect(marks()).toHaveLength(0);
+    h.manager.setPaused(false);
+    mark();
+    await flush();
+    expect(marks()).toEqual([{ kind: "screen-mark", x: 0.15, y: 0.8, ...envelope, to: viewer, client: hc }]);
+    h.manager.dispose();
   });
   it("não reemite o mesmo estado de mídia para snapshots equivalentes", () => {
     const v = setup(viewer, vc);

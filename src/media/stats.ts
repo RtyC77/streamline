@@ -2,6 +2,8 @@ import type { PeerMetric } from "../types";
 export interface Counter {
   bytes: number;
   timestamp: number;
+  received?: number;
+  lost?: number;
 }
 export function bitrate(now: Counter, previous?: Counter): number | undefined {
   if (
@@ -45,9 +47,19 @@ export async function collectStats(
       const counter = {
         bytes: (s.bytesSent ?? s.bytesReceived) as number,
         timestamp: s.timestamp as number,
+        received: s.packetsReceived as number | undefined,
+        lost: s.packetsLost as number | undefined,
       };
+      const previous = counters.get(s.id);
       metric.direction = s.type === "outbound-rtp" ? "Enviando" : "Recebendo";
-      metric.bitrate = bitrate(counter, counters.get(s.id));
+      metric.bitrate = bitrate(counter, previous);
+      if (counter.received !== undefined && counter.lost !== undefined &&
+          previous?.received !== undefined && previous.lost !== undefined) {
+        const received = counter.received - previous.received;
+        const lost = counter.lost - previous.lost;
+        if (received >= 0 && lost >= 0 && received + lost >= 20)
+          metric.lossRate = lost / (received + lost);
+      }
       counters.set(s.id, counter);
       metric.fps = s.framesPerSecond;
       metric.width = s.frameWidth;

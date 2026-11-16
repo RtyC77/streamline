@@ -60,11 +60,12 @@ Para publicar o catálogo, aplique a migration `202611120009_room_directory.sql`
 1. Entre com uma conta ativa e verificada. Se sua conta estiver autorizada, clique em **Criar sala**.
 2. Copie o convite na barra lateral e envie-o aos amigos por um canal de sua confiança.
 3. Cada amigo abre o link, entra com sua conta verificada e clica em **Entrar na sala**.
-4. Um participante clica em **Compartilhar jogo** e escolhe a janela no diálogo nativo. Marque o áudio se o navegador oferecer essa opção.
+4. Um participante clica em **Compartilhar jogo** e escolhe a janela no diálogo nativo. Marque o áudio se o navegador oferecer essa opção. Use **Testar imagem e áudio** para ver a captura e o medidor antes de iniciar.
 5. O espectador recebe a mídia automaticamente. Se o navegador bloquear autoplay, clique em **Reproduzir transmissão**.
 6. Use volume e tela cheia no espectador. No transmissor, volte para o jogo: não há prévia local consumindo renderização de vídeo.
 7. Use **Parar transmissão**, o controle nativo do navegador ou **Sair da sala** para encerrar os recursos.
 8. Na lista de participantes, use **Ativar câmera** para compartilhar vídeo sem áudio com a sala. **Desativar câmera** encerra a captura e restaura o avatar.
+9. Use **Pausar transmissão** para ocultar a imagem e silenciar o som do jogo até retomar. Para permitir indicações sobre a imagem, ative **Permitir marcações dos espectadores** no menu da transmissão.
 
 O convite tem 64 caracteres hexadecimais e cerca de 244 bits aleatórios, gerados criptograficamente no servidor. Somente o hash SHA-256 fica no banco. O segredo é carregado no fragmento `#convite=...`, que não é enviado ao servidor estático em uma requisição HTTP. Trate o convite como segredo: quem o recebe pode solicitar associação até a expiração. O UUID da sala sozinho não concede acesso.
 
@@ -77,7 +78,7 @@ Salas e convites expiram em 8 horas. Associações sem heartbeat por 60 segundos
 - Bitrate inicial de vídeo de 3 Mbps **por espectador**, com teto adaptado entre 2,5 e 3 Mbps via `RTCRtpSender.setParameters()`. O controle nativo de congestionamento pode transmitir abaixo desse teto. RTT alto ou limitação de banda reduz o teto; condições estáveis o elevam gradualmente.
 - Uma captura é reutilizada por até sete peers. Com sete espectadores, planeje aproximadamente 21 Mbps de vídeo de upload no perfil inicial, além de áudio e overhead. A carga de codificação depende do navegador, driver e equipamento; não há garantia de compartilhamento de encoder nem de aceleração por hardware.
 - Sem espectadores, as trilhas são desativadas. Isso evita envio de mídia, mas não garante que todo custo da captura nativa desapareça. Parar a transmissão encerra as trilhas de fato.
-- Estatísticas são coletadas a cada 10 segundos no transmissor com peers, ou a cada 5 segundos com diagnóstico aberto. Espectadores não coletam estatísticas enquanto o diagnóstico está fechado. O painel é oculto por padrão. Não são estimados CPU, GPU ou RAM.
+- As estatísticas são coletadas a cada 10 segundos para a adaptação do transmissor e para avisos na tela ao vivo recebida, ou a cada 5 segundos com diagnóstico aberto. No modo econômico e com o diagnóstico fechado, o espectador não coleta estatísticas. O painel é oculto por padrão.
 - A opção **Compartilhar áudio do sistema** permite som do PC junto com janelas ou tela inteira. Ela começa desmarcada, com aviso de que jogo, YouTube e outros aplicativos podem ser ouvidos. Marcada: solicita `windowAudio: 'system'` e `systemAudio: 'include'`, mantendo o áudio disponibilizado pelo navegador. Desmarcada: solicita exclusão do áudio do sistema e remove áudio de fontes que não sejam abas. Microfone nunca é solicitado automaticamente. Veja [docs/AUDIO.md](docs/AUDIO.md).
 - O tipo de vídeo `window` não prova que o áudio corresponde apenas ao jogo. A API não permite confirmar essa separação; por isso o aplicativo só permite esse áudio quando o usuário marca explicitamente a opção de áudio do sistema. Ele não tenta separar uma mistura já fornecida pelo navegador.
 - A presença de uma trilha de áudio não prova que ela contém som audível. A interface informa trilha presente/ausente; confirme o som com o teste manual. Microfone nunca é solicitado.

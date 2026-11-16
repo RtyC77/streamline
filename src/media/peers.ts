@@ -1,4 +1,4 @@
-import type {MediaState,PeerMetric,Signal,SignalBody,Snapshot,SwitchTiming} from '../types';
+import type {MediaState,PeerMetric,ScreenMark,ScreenPoint,Signal,SignalBody,Snapshot,SwitchTiming} from '../types';
 import {activeStreams} from '../types';
 import {applyCaptureQuality,preferCodecs,tuneSender} from './capture';
 import {defaultProfile,videoProfile,type CaptureProfile} from './profile';
@@ -11,6 +11,8 @@ interface Peer {
  created:number; retries:number; restartAt:number; bitrate:number; negotiating:boolean; data:RTCDataChannel|null;
  timing:SwitchTiming;
  economy:boolean; tuning:Promise<void>;
+ poorSamples?: number;
+ mark?: ScreenMark;
  videoSender?: RTCRtpSender;
  audioSender?: RTCRtpSender;
 }
@@ -19,6 +21,7 @@ export class Peers {
  private snapshot:Snapshot|null=null;
  private stream:MediaStream|null=null;
  private sourceChange: Promise<void> | null = null;
+ private replacement: MediaStream | null = null;
  private localSession:string|null=null;
  private selected:string|null=null;
  private remote:MediaStream|null=null;
@@ -26,6 +29,10 @@ export class Peers {
  private previews=new Set<string>();
  private profile:CaptureProfile=defaultProfile;
  private economy=false;
+ private paused = false;
+ private allowMarks = false;
+ private lastRelayedMark = -Infinity;
+ private lastSentMark = -Infinity;
  private qualityPending=false;
  private disposed=false;
  private queues=new Map<string,Promise<void>>();
@@ -51,6 +58,13 @@ export class Peers {
    connectionIssue=!incoming.pc.remoteDescription?'O transmissor ainda não respondeu à negociação. Confira a conexão dos dois participantes com a sala.':relay?'A conexão de mídia não foi estabelecida. Verifique o serviço TURN e a rede dos participantes.':'A conexão direta não foi estabelecida e esta sessão não tem TURN configurado. Algumas redes exigem TURN para assistir; atualizar a página não substitui essa configuração.';
   }
   const state:MediaState={sharing:!!this.stream,selected:this.selected,remote:this.remote,captureAudio:this.audio,
+   paused: this.paused,
+   allowMarks: this.allowMarks,
+   mark: incoming?.mark,
+   suggestEconomy: !this.economy && incoming?.pc.connectionState === 'connected' && (incoming.poorSamples ?? 0) >= 2,
+   suggestLowerQuality: !this.paused && (this.profile.resolution > 720 || this.profile.fps > 30) &&
+    [...this.peers.values()].some(peer => peer.outgoing && !peer.economy &&
+     peer.pc.connectionState === 'connected' && (peer.poorSamples ?? 0) >= 2),
    switching:this.switching,switchTiming:incoming?.timing,
    connectionIssue,
    audio:this.remote?this.remoteAudio:this.audio,
@@ -103,6 +117,8 @@ export class Peers {
  setEconomy(enabled:boolean){
   this.economy=enabled;
   this.qualityPending=true;
+  for (const peer of this.peers.values()) if (!peer.outgoing) peer.poorSamples = 0;
+  this.emit();
  }
  private async sendQuality(){
   const p=[...this.peers.values()].find(peer=>!peer.outgoing&&!peer.preview&&peer.session===this.selected);
@@ -163,6 +179,7 @@ export class Peers {
  }
  private async updateProfile(profile: CaptureProfile) {
   this.profile = profile;
+  this.emit();
   await Promise.all([...this.peers.values()].filter(p => p.outgoing && !p.preview).map(p => {
    p.bitrate = this.bitrateLimits(p).bitrate;
    return this.tunePeer(p);
@@ -172,12 +189,14 @@ export class Peers {
   const previous = this.stream;
   const video = stream.getVideoTracks()[0];
   if (!previous || !video || this.sourceChange) throw new Error('A transmissão não está disponível para troca.');
+  this.replacement = stream;
   const operation = this.replaceLocalTracks(previous, stream, video, audio, profile, poster);
   this.sourceChange = operation;
   try { await operation; }
-  finally { this.sourceChange = null; }
+  finally { this.sourceChange = null; this.replacement = null; }
  }
  private async replaceLocalTracks(previous: MediaStream, stream: MediaStream, video: MediaStreamTrack, audio: string, profile: CaptureProfile, poster: string | null) {
+  if (this.paused) stream.getTracks().forEach(track => { track.enabled = false; });
   const changed: Array<{peer: Peer; sender: RTCRtpSender; track: MediaStreamTrack | null}> = [];
   try {
    for (const peer of [...this.peers.values()]) {
@@ -205,12 +224,38 @@ export class Peers {
   await this.updateProfile(profile);
  }
  stopLocal(){
+  this.paused = false;
+  this.allowMarks = false;
+  this.lastRelayedMark = -Infinity;
   this.stream?.getTracks().forEach(t=>t.stop());this.stream=null;this.localSession=null;this.poster=null;this.audio='Sem trilha';
+  this.replacement?.getTracks().forEach(track => track.stop());
   for(const [key,p]of this.peers)if(p.outgoing)this.close(key);this.emit();
  }
  private balanceTracks(){
-  const enabled=[...this.peers.values()].some(p=>p.outgoing&&!p.preview);
+  const enabled=!this.paused&&[...this.peers.values()].some(p=>p.outgoing&&!p.preview);
   this.stream?.getTracks().forEach(t=>{if(t.enabled!==enabled)t.enabled=enabled;});
+  this.replacement?.getTracks().forEach(track => { if (track.enabled !== enabled) track.enabled = enabled; });
+ }
+ setPaused(paused: boolean) {
+  if (!this.stream) return false;
+  this.paused = paused;
+  if (paused) for (const peer of this.peers.values()) if (peer.outgoing) peer.poorSamples = 0;
+  this.balanceTracks();
+  this.emit();
+  return true;
+ }
+ setAllowMarks(allow: boolean) {
+  if (!this.stream) return false;
+  this.allowMarks = allow;
+  this.emit();
+  return true;
+ }
+ markScreen(point: ScreenPoint) {
+  const peer = [...this.peers.values()].find(p => !p.outgoing && !p.preview && p.session === this.selected);
+  const now = Date.now();
+  if (!peer || !this.remote || now - this.lastSentMark < 300) return;
+  this.lastSentMark = now;
+  void this.send(this.envelope(peer, {kind: 'screen-mark', ...point})).catch(this.warn);
  }
  private envelope(p:Peer,body:SignalBody):Signal{return {...body,to:p.id,session:p.session,connection:p.connection,client:this.clientId};}
  private flushIce(p:Peer){
@@ -255,7 +300,7 @@ export class Peers {
   if(preview){
    let received=false;
    const dc=pc.createDataChannel('still',{negotiated:true,id:0,ordered:true});p.data=dc;
-   dc.onopen=()=>{if(outgoing&&this.peers.get(key)===p){try{dc.send(this.poster??'unavailable');}catch{this.close(key);}}};
+   dc.onopen=()=>{if(outgoing&&this.peers.get(key)===p){try{dc.send((!this.paused && this.poster)||'unavailable');}catch{this.close(key);}}};
    dc.onmessage=e=>{
     if(this.peers.get(key)!==p)return;
     if(outgoing){if(e.data==='ack')this.close(key);return;}
@@ -298,7 +343,19 @@ export class Peers {
    const outgoing=signal.session===this.localSession;
    if(!streams.some(s=>s.session_id===signal.session&&s.broadcaster_id===(outgoing?this.self:id)))return;
    const p=this.peers.get(this.key(id,outgoing));if(!p||p.connection!==signal.connection||p.session!==signal.session)return;
-   if(signal.kind==='viewer-quality'){
+   if (signal.kind === 'screen-mark') {
+    if (p.preview) return;
+    const point = {x: signal.x, y: signal.y};
+    if (!outgoing && p.session === this.selected) {
+     p.mark = { ...point, expiresAt: Date.now() + 1800 };
+     this.emit();
+    } else if (outgoing && this.allowMarks && !this.paused && Date.now() - this.lastRelayedMark >= 300) {
+     this.lastRelayedMark = Date.now();
+     for (const viewer of this.peers.values())
+      if (viewer.outgoing && !viewer.preview && viewer.session === p.session)
+       void this.send(this.envelope(viewer, {kind: 'screen-mark', ...point})).catch(this.warn);
+    }
+   }else if(signal.kind==='viewer-quality'){
     if(outgoing&&!p.preview&&p.economy!==signal.economy){
      p.economy=signal.economy;
      p.bitrate=Math.min(p.bitrate,this.bitrateLimits(p).bitrate);
@@ -345,18 +402,29 @@ export class Peers {
   }this.emit();
  }
  async sample(diagnostics=false){
-  const peers=[...this.peers.values()].filter(p=>!p.preview&&(diagnostics||p.outgoing));
+  const peers = [...this.peers.values()].filter(p => !p.preview && (p.outgoing || diagnostics ||
+    (!this.economy && p.pc.connectionState === 'connected' && p.timing.firstFrameMs !== undefined)));
   if(this.disposed||this.statisticsRunning||!peers.length)return;this.statisticsRunning=true;
   try{
    const metrics=await Promise.all(peers.map(async p=>{
     const m=await collectStats(p.pc,p.id,p.counters);
     m.connection=p.connection;
-    if(p.outgoing&&p.pc.connectionState==='connected'){
+    if (!this.current(p)) return m;
+    const connected = p.pc.connectionState === 'connected';
+    const poor = connected && (p.outgoing
+      ? !this.paused && m.limitation === 'bandwidth'
+      : p.timing.firstFrameMs !== undefined && ((m.lossRate ?? 0) >= 0.05 || (m.rtt ?? 0) >= 0.45));
+    p.poorSamples = poor ? Math.min(2, (p.poorSamples ?? 0) + 1) : 0;
+    if(p.outgoing&&!this.paused&&connected){
      const target=this.bitrateLimits(p),congested=m.limitation==='bandwidth'||(m.rtt??0)>0.35;
      const next=congested?Math.max(target.minBitrate,p.bitrate-200_000):Math.min(target.bitrate,p.bitrate+100_000);
      if(next!==p.bitrate){p.bitrate=next;await this.tunePeer(p);}
     }return m;
-   }));if(!this.disposed&&diagnostics)this.metrics(metrics);
+   }));
+   if (!this.disposed) {
+    this.emit();
+    if (diagnostics) this.metrics(metrics);
+   }
   }catch{/* Closing peers can invalidate stats. */}finally{this.statisticsRunning=false;}
  }
  dispose(){this.disposed=true;this.cancelSelectionTimer();this.switching=false;this.stopLocal();for(const key of this.peers.keys())this.close(key);this.clearRemote();this.previews.clear();this.queues.clear();this.metrics([]);}

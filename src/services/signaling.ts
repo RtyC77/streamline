@@ -1,6 +1,6 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { client } from "./supabase";
-import type { Member, Signal } from "../types";
+import type { Member, Signal, StreamControls } from "../types";
 
 export function parseSignal(value: unknown): Signal | null {
   if (!value || typeof value !== "object") return null;
@@ -14,6 +14,9 @@ export function parseSignal(value: unknown): Signal | null {
     return null;
   if (m.kind === "watch" && (m.preview===undefined||typeof m.preview==='boolean') && (m.economy===undefined||typeof m.economy==='boolean')) return m as Signal;
   if (m.kind === "viewer-quality" && m.media === undefined && typeof m.economy === "boolean") return m as Signal;
+  if (m.kind === "screen-mark" && m.media === undefined &&
+      typeof m.x === "number" && m.x >= 0 && m.x <= 1 &&
+      typeof m.y === "number" && m.y >= 0 && m.y <= 1) return m as Signal;
   if (m.kind === 'unwatch') return m as Signal;
   if (m.kind === 'ice-batch' && Array.isArray(m.candidates) && m.candidates.length>0 && m.candidates.length<=16 && m.candidates.every(candidate=>parseSignal({...m,kind:'ice',candidate})!==null))return m as Signal;
   if (
@@ -42,10 +45,12 @@ export class Signaling {
   private epoch = "";
   private lastRefresh = 0;
   private camera: string | null = null;
+  private streamControls: StreamControls | null = null;
   private cameraPublished = false;
   private selfClient: string | undefined;
   private memberClients = new Map<string, string>();
   private publication = 0;
+  private publishing = false;
   private counts = new Map<string, { start: number; count: number }>();
   constructor(
     private room: string,
@@ -57,6 +62,7 @@ export class Signaling {
     private changed: () => void = () => undefined,
     private cameraChanged: (sender: string, session: string | null, clientId: string | null) => void = () => undefined,
     private cameraPublication: (success: boolean) => void = () => undefined,
+    private controlsChanged: (sender: string, controls: StreamControls | null) => void = () => undefined,
   ) {}
   async sync(members: Member[], epoch: string) {
     if (this.closed) return;
@@ -76,6 +82,7 @@ export class Signaling {
     }
     for (const [id, channel] of this.channels)
       if (!members.some((m) => m.user_id === id)) {
+        this.controlsChanged(id, null);
         this.channels.delete(id);
         this.ready.delete(id);
         this.counts.delete(id);
@@ -140,6 +147,7 @@ export class Signaling {
         if (state === "SUBSCRIBED") {
           this.ready.add(id);
           if (id === this.self) {
+            this.publication++;
             this.cameraPublished = false;
             void this.publishCamera();
             this.status(true);
@@ -159,29 +167,49 @@ export class Signaling {
   }
   private readCamera(id: string, channel: RealtimeChannel) {
     const clientId = this.memberClients.get(id);
-    const presence = Object.values(channel.presenceState<{ camera?: string; client?: string }>()).flat();
+    const presence = Object.values(channel.presenceState<{
+      camera?: string; client?: string; streamControls?: StreamControls;
+    }>()).flat();
     const current = presence.reverse().find(item => item.client === clientId);
     const camera = current?.camera;
     this.cameraChanged(id, typeof camera === "string" && /^[a-f0-9-]{36}$/.test(camera) ? camera : null, current?.client ?? null);
+    const controls = current?.streamControls;
+    this.controlsChanged(id, controls && typeof controls.session === "string" &&
+      /^[a-f0-9-]{36}$/.test(controls.session) && typeof controls.paused === "boolean" &&
+      typeof controls.allowMarks === "boolean" ? controls : null);
   }
   setCamera(session: string | null) {
     this.camera = session;
+    this.refreshPresence();
+  }
+  setStreamControls(controls: StreamControls | null) {
+    if (controls === this.streamControls) return;
+    this.streamControls = controls;
+    this.refreshPresence();
+  }
+  private refreshPresence() {
+    this.publication++;
     this.cameraPublished = false;
     void this.publishCamera();
   }
   async publishCamera() {
     const channel = this.channels.get(this.self);
-    if (!channel || !this.ready.has(this.self) || this.closed || this.cameraPublished) return;
+    if (!channel || !this.ready.has(this.self) || this.closed || this.cameraPublished || this.publishing) return;
     const camera = this.camera;
-    const publication = ++this.publication;
-    this.cameraPublished = true;
+    const publication = this.publication;
+    this.publishing = true;
     let success = false;
     try {
-      success = (await channel.track({ online: true, camera, client: this.selfClient })) === "ok";
+      success = (await channel.track({ online: true, camera, client: this.selfClient, streamControls: this.streamControls })) === "ok";
     } catch {
       // Maintenance retries publication after an interrupted connection.
     }
-    if (this.closed || this.channels.get(this.self) !== channel || this.publication !== publication || this.camera !== camera) return;
+    this.publishing = false;
+    if (this.closed) return;
+    if (this.channels.get(this.self) !== channel || this.publication !== publication) {
+      void this.publishCamera();
+      return;
+    }
     this.cameraPublished = success;
     this.cameraPublication(success);
   }

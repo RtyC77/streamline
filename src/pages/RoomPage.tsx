@@ -6,14 +6,15 @@ import {TransitionCover} from '../components/TransitionCover';
 import { Diagnostics } from "../components/Diagnostics";
 import { Settings } from "../components/Settings";
 import {ShareOptions} from '../components/ShareOptions';
+import { CaptureTest } from "../components/CaptureTest";
 import {activeStreams} from '../types';
 import {defaultProfile,type CaptureProfile} from '../media/profile';
-import { captureGame, captureSupported } from "../media/capture";
+import { captureGame, captureSupported, type CaptureInfo } from "../media/capture";
 import { roomSounds } from "../media/room-sounds";
 import { inviteLink } from "../services/rooms";
 import { explain } from "../services/errors";
 import { RoomSession } from "../services/session";
-import type { CameraView, MediaState, PeerMetric, Snapshot } from "../types";
+import type { CameraView, MediaState, PeerMetric, Snapshot, StreamControls } from "../types";
 import { ReleaseInfo } from "../components/ReleaseInfo";
 const initialMedia: MediaState = {
   sharing: false,
@@ -22,6 +23,16 @@ const initialMedia: MediaState = {
   connections: 0,
   status: "Aguardando transmissão",
 };
+interface PendingCapture {
+  capture: CaptureInfo;
+  controller: RoomSession;
+  replacing: boolean;
+  requested: CaptureProfile;
+}
+function disposeCapture(capture: CaptureInfo) {
+  capture.dispose?.();
+  capture.stream.getTracks().forEach(track => track.stop());
+}
 export function RoomPage({
   initial,
   self,
@@ -51,6 +62,9 @@ export function RoomPage({
   useEffect(()=>{setPosters(previous=>{const next=Object.fromEntries(Object.entries(previous).filter(([id])=>streamKey.split(',').includes(id)));return Object.keys(next).length===Object.keys(previous).length?previous:next;});},[streamKey]);
   const capacity = snapshot.room.max_members ?? 5;
   const [media, setMedia] = useState(initialMedia);
+  const [streamControls, setStreamControls] = useState<Record<string, StreamControls>>({});
+  const [captureTest, setCaptureTest] = useState<PendingCapture | null>(null);
+  const pendingCapture = useRef<PendingCapture | null>(null);
   const [cameras, setCameras] = useState<Record<string, CameraView>>({});
   const [cameraBusy, setCameraBusy] = useState(false);
   const [cameraError, setCameraError] = useState("");
@@ -85,6 +99,25 @@ export function RoomPage({
   const session = useRef<RoomSession | null>(null);
   const stage = useRef<HTMLDivElement>(null);
   const report = useCallback((e: unknown) => setError(explain(e)), []);
+  const cancelCaptureTest = useCallback(() => {
+    const pending = pendingCapture.current;
+    if (!pending) return;
+    pendingCapture.current = null;
+    disposeCapture(pending.capture);
+    setCaptureTest(null);
+    setSharingBusy(false);
+  }, []);
+  useEffect(() => {
+    const track = captureTest?.capture.stream.getVideoTracks()[0];
+    if (!track) return;
+    const ended = () => {
+      cancelCaptureTest();
+      setError("A captura foi encerrada. Escolha uma janela para tentar novamente.");
+    };
+    if (track.readyState === "ended") { ended(); return; }
+    track.addEventListener("ended", ended);
+    return () => track.removeEventListener("ended", ended);
+  }, [cancelCaptureTest, captureTest]);
   const closeSidebar = () => {
     setSidebarOpen(false);
     sidebarToggle.current?.focus();
@@ -144,6 +177,11 @@ export function RoomPage({
         if (!cancelled) onLeave(reason);
       },
       preview:savePoster,
+      streamControls: (sender, next) => setStreamControls(previous => {
+        const current = previous[sender];
+        return current?.session === next.session && current.paused === next.paused && current.allowMarks === next.allowMarks
+          ? previous : { ...previous, [sender]: next };
+      }),
     });
     session.current = controller;
     void controller
@@ -153,6 +191,8 @@ export function RoomPage({
       })
       .catch(report);
     const hide = (event: PageTransitionEvent) => {
+      session.current = null;
+      cancelCaptureTest();
       void controller.close(!event.persisted).catch(() => {});
     };
     window.addEventListener("pagehide", hide);
@@ -165,12 +205,13 @@ export function RoomPage({
       window.removeEventListener("click", sounds.unlock, true);
       window.removeEventListener("keydown", sounds.unlock, true);
       sounds.close();
+      cancelCaptureTest();
       session.current = null;
       window.removeEventListener("pagehide", hide);
       window.removeEventListener("pageshow", show);
       void controller.close();
     };
-  }, [initial, self, report, onLeave,savePoster]);
+  }, [initial, self, report, onLeave, savePoster, cancelCaptureTest]);
   const cameraOn = !!cameras[self]?.stream;
   const toggleCamera = async () => {
     const controller = session.current;
@@ -190,10 +231,35 @@ export function RoomPage({
     }
   };
   const selected=streams.find(s=>s.session_id===media.selected);
+  const controlsFor = (stream: typeof selected) => {
+    if (!stream) return;
+    if (stream.broadcaster_id === self)
+      return { paused: media.paused, allowMarks: media.allowMarks };
+    const controls = streamControls[stream.broadcaster_id];
+    return controls?.session === stream.session_id ? controls : undefined;
+  };
+  const selectedControls = controlsFor(selected);
+  const selectedPaused = selectedControls?.paused === true;
   const host = snapshot.members.find(
     (m) => m.user_id === selected?.broadcaster_id,
   );
-  const share = async (requested:CaptureProfile) => {
+  const finishShare = async ({ capture, controller, replacing, requested }: PendingCapture) => {
+    try {
+      if (replacing) await controller.replaceCapture(capture);
+      else await controller.share(capture);
+      if (session.current !== controller) return;
+      setProfile(requested);
+      const actual = capture.settings;
+      setNotice(
+        `${capture.audio}. ${capture.tuning}${actual.width && actual.height ? ` Captura retornada: ${actual.width} × ${actual.height}${actual.frameRate ? `, ${actual.frameRate.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} FPS` : ""}.` : ""}`,
+      );
+    } catch (error) {
+      if (session.current === controller) report(error);
+    } finally {
+      if (session.current === controller) setSharingBusy(false);
+    }
+  };
+  const share = async (requested: CaptureProfile, test: boolean) => {
     if (sharingBusy) return;
     const controller = session.current;
     const replacing = media.sharing;
@@ -206,22 +272,27 @@ export function RoomPage({
       // getDisplayMedia runs immediately within the click gesture, before RPCs.
       const capture = await captureGame(requested);
       if (session.current !== controller) {
-        capture.dispose?.();
-        capture.stream.getTracks().forEach((t) => t.stop());
+        disposeCapture(capture);
         return;
       }
-      if (replacing) await controller.replaceCapture(capture);
-      else await controller.share(capture);
-      setProfile(requested);
-      const actual = capture.settings;
-      setNotice(
-        `${capture.audio}. ${capture.tuning}${actual.width && actual.height ? ` Captura retornada: ${actual.width} × ${actual.height}${actual.frameRate ? `, ${actual.frameRate.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} FPS` : ""}.` : ""}`,
-      );
+      const pending = { capture, controller, replacing, requested };
+      if (test) {
+        pendingCapture.current = pending;
+        setCaptureTest(pending);
+      } else await finishShare(pending);
     } catch (e) {
-      report(e);
-    } finally {
-      setSharingBusy(false);
+      if (session.current === controller) {
+        report(e);
+        setSharingBusy(false);
+      }
     }
+  };
+  const confirmCaptureTest = () => {
+    const pending = pendingCapture.current;
+    if (!pending) return;
+    pendingCapture.current = null;
+    setCaptureTest(null);
+    void finishShare(pending);
   };
   const changeQuality = async (requested: CaptureProfile) => {
     const controller = session.current;
@@ -242,6 +313,15 @@ export function RoomPage({
     } finally {
       setSharingBusy(false);
     }
+  };
+  const saferProfile: CaptureProfile = {
+    ...profile,
+    resolution: profile.resolution > 720 ? 720 : profile.resolution,
+    fps: profile.fps > 30 ? 30 : profile.fps,
+  };
+  const useEconomy = (enabled: boolean) => {
+    setViewerEconomy(enabled);
+    session.current?.setViewerEconomy(enabled);
   };
   const copy = async () => {
     try {
@@ -378,10 +458,10 @@ export function RoomPage({
             <span className={`stream-indicator ${host ? "live" : ""}`} />
             <strong>
               {host
-                ? `${host.nickname} está transmitindo`
+                ? selectedPaused ? `${host.nickname} pausou a transmissão` : `${host.nickname} está transmitindo`
                 : "Tudo pronto para o próximo jogo"}
             </strong>
-            {host && <span className="live-tag">AO VIVO</span>}
+            {host && !selectedPaused && <span className="live-tag">AO VIVO</span>}
           </div>
           <button
             className={`icon-button ${diagnostics ? "active" : ""}`}
@@ -394,14 +474,17 @@ export function RoomPage({
         </div>
         {expanded && streams.length > 0 && <button className="secondary back-to-grid" onClick={() => setExpanded(false)}>Voltar</button>}
         {streams.length>0&&!expanded&&<div className="stream-picker" aria-label="Telas compartilhadas" aria-busy={media.switching===true}>
-          {streams.map(stream=>{const member=snapshot.members.find(m=>m.user_id===stream.broadcaster_id);const current=stream.session_id===media.selected;return <button key={stream.session_id} className={`stream-tile ${current?'selected':''}`} aria-pressed={current} disabled={media.switching} onClick={()=>{if(!current||media.connectionIssue){freeze.current?.();session.current?.watch(stream.session_id);}setExpanded(true);}}>
-            <div className="stream-still">{posters[stream.session_id]?<img src={posters[stream.session_id]} alt="Quadro congelado da transmissão"/>:<Icon name="screen" size={28}/>}<span>{current?'Selecionada':posters[stream.session_id]?'Congelada':'Prévia indisponível'}</span></div>
+          {streams.map(stream=>{const member=snapshot.members.find(m=>m.user_id===stream.broadcaster_id);const current=stream.session_id===media.selected;const paused=controlsFor(stream)?.paused;return <button key={stream.session_id} className={`stream-tile ${current?'selected':''}`} aria-pressed={current} disabled={media.switching} onClick={()=>{if(!current||media.connectionIssue){freeze.current?.();session.current?.watch(stream.session_id);}setExpanded(true);}}>
+            <div className="stream-still">{!paused&&posters[stream.session_id]?<img src={posters[stream.session_id]} alt="Quadro congelado da transmissão"/>:<Icon name="screen" size={28}/>}<span>{paused?'Pausada':current?'Selecionada':posters[stream.session_id]?'Congelada':'Prévia indisponível'}</span></div>
             <strong>{member?.nickname??'Participante'}{stream.broadcaster_id===self?' · você':''}</strong>
           </button>;})}
         </div>}
         <div className={`stage ${streams.length > 0 && !expanded ? 'stage-background' : ''}`} ref={stage}>
           {media.remote ? (
-            <Player key={media.selected} stream={media.remote} volume={volume} onError={setError} freeze={freeze} poster={media.selected?posters[media.selected]:undefined} onReady={()=>{if(media.selected&&media.remote)session.current?.firstFrame(media.selected,media.remote);}} onStill={image=>{if(media.selected)session.current?.rememberPreview(media.selected,image);}}/>
+            <Player key={media.selected} stream={media.remote} volume={volume} onError={setError}
+              paused={selectedPaused} allowMarks={selectedControls?.allowMarks} mark={media.mark}
+              onMark={point => session.current?.markScreen(point)}
+              freeze={freeze} poster={media.selected?posters[media.selected]:undefined} onReady={()=>{if(media.selected&&media.remote)session.current?.firstFrame(media.selected,media.remote);}} onStill={image=>{if(media.selected)session.current?.rememberPreview(media.selected,image);}}/>
           ) : (
             <div className="stage-empty">
               <div
@@ -451,7 +534,8 @@ export function RoomPage({
               </span>
             </div>
           )}
-          {!media.remote&&selected&&selected.broadcaster_id!==self&&<TransitionCover poster={posters[selected.session_id]} failed={!media.switching&&!!media.connectionIssue}/>}
+          {!media.remote && selectedPaused && <div className="pause-cover" role="status">Transmissão pausada</div>}
+          {!media.remote&&!selectedPaused&&selected&&selected.broadcaster_id!==self&&<TransitionCover poster={posters[selected.session_id]} failed={!media.switching&&!!media.connectionIssue}/>}
         </div>
         <div className="control-bar">
           <div className="main-actions">
@@ -497,6 +581,10 @@ export function RoomPage({
                     <Icon name="settings" size={17} />
                     Editar transmissão
                   </button>
+                  <button type="button" className="secondary" aria-pressed={media.allowMarks === true}
+                    onClick={() => session.current?.setAllowMarks(!media.allowMarks)}>
+                    Permitir marcações dos espectadores
+                  </button>
                 </div>
               </div>
             ) : (
@@ -515,6 +603,10 @@ export function RoomPage({
                 {sharingBusy ? "Preparando…" : "Compartilhar jogo"}
               </button>
             )}
+            {media.sharing && <button type="button" className="secondary" disabled={sharingBusy}
+              onClick={() => session.current?.setPaused(!media.paused)}>
+              {media.paused ? "Retomar transmissão" : "Pausar transmissão"}
+            </button>}
             <button
               className="secondary camera-toggle"
               disabled={cameraBusy || (!ready && !cameraOn)}
@@ -540,11 +632,7 @@ export function RoomPage({
               className="secondary viewer-economy"
               aria-pressed={viewerEconomy}
               title="Solicita até 480p, 24 FPS e 800 kbps para as telas que você assiste"
-              onClick={() => {
-                const enabled = !viewerEconomy;
-                setViewerEconomy(enabled);
-                session.current?.setViewerEconomy(enabled);
-              }}
+              onClick={() => useEconomy(!viewerEconomy)}
             >
               Modo econômico
             </button>
@@ -586,6 +674,20 @@ export function RoomPage({
           <div className="notice connection-toast" role="alert">{connectionNotice}</div>
         )}
         <div className="room-details">
+          {connection === "Conectado" && media.suggestEconomy && !selectedPaused && !viewerEconomy && (
+            <div className="notice room-message quality-advice">
+              <span role="status">A conexão com esta transmissão está lenta ou instável.</span>
+              <button className="secondary" type="button" onClick={() => useEconomy(true)}>Ativar modo econômico</button>
+            </div>
+          )}
+          {connection === "Conectado" && media.suggestLowerQuality && !sharingBusy && (
+            <div className="notice room-message quality-advice">
+              <span role="status">Sua transmissão está sendo limitada pela conexão.</span>
+              <button className="secondary" type="button" onClick={() => void changeQuality(saferProfile)}>
+                Reduzir para {saferProfile.resolution}p / {saferProfile.fps} FPS
+              </button>
+            </div>
+          )}
           {cameraError && <div className="error room-message" role="alert">{cameraError}</div>}
           {error && (
             <div className="error room-message" role="alert">
@@ -625,7 +727,9 @@ export function RoomPage({
           </div>
         </div>
       </main>
-      {shareOptions&&<ShareOptions initial={profile} onClose={()=>setShareOptions(false)} onShare={requested=>void share(requested)} onQuality={media.sharing ? requested=>void changeQuality(requested) : undefined}/>}
+      {shareOptions&&<ShareOptions initial={profile} onClose={()=>setShareOptions(false)} onShare={(requested, test)=>void share(requested, test)} onQuality={media.sharing ? requested=>void changeQuality(requested) : undefined}/>}
+      {captureTest && <CaptureTest capture={captureTest.capture} replacing={captureTest.replacing}
+        onCancel={cancelCaptureTest} onConfirm={confirmCaptureTest} />}
       {settings && (
         <Settings
           onClose={() => setSettings(false)}
