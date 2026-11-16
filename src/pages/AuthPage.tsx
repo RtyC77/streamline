@@ -172,6 +172,7 @@ export function AuthPage({ recovery, initialMessage = "" }: { recovery?: boolean
             <button className="secondary" disabled={busy} onClick={() => changeMode("login")}>Voltar ao login</button>}
         </nav>
       </section>
+      {!recovery && <footer><a href="/sobre">Sobre o StreamLite</a></footer>}
     </main>
   );
 }
